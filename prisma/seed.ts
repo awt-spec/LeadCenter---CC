@@ -226,6 +226,200 @@ async function main() {
   }
 
   console.log(`  ✓ Admin user: ${adminUser.email}`);
+
+  // Tags
+  console.log('Seeding tags...');
+  const TAGS = [
+    { name: 'High Priority', color: '#EF4444' },
+    { name: 'Decision Maker', color: '#C8200F' },
+    { name: 'Technical Buyer', color: '#3B82F6' },
+    { name: 'Champion', color: '#10B981' },
+    { name: 'Cold Lead', color: '#64748B' },
+    { name: 'Referred', color: '#F59E0B' },
+    { name: 'Event Lead', color: '#8B5CF6' },
+    { name: 'RFP Active', color: '#EC4899' },
+    { name: 'Competitor Client', color: '#0EA5E9' },
+    { name: 'Partner Contact', color: '#14B8A6' },
+  ];
+  for (const tag of TAGS) {
+    await prisma.tag.upsert({
+      where: { name: tag.name },
+      update: { color: tag.color },
+      create: tag,
+    });
+  }
+  console.log(`  ✓ ${TAGS.length} tags`);
+
+  // Test contacts
+  console.log('Seeding test contacts...');
+  const tagMap = new Map(
+    (await prisma.tag.findMany()).map((t) => [t.name, t.id])
+  );
+
+  const TEST_CONTACTS = [
+    {
+      email: 'lourdes.ramirez@bancatest-mx.example',
+      firstName: 'Lourdes',
+      lastName: 'Ramírez',
+      jobTitle: 'Directora de TI',
+      companyName: 'Banca Test México',
+      country: 'México',
+      city: 'Ciudad de México',
+      phone: '+52 55 1234 5678',
+      source: 'LINKEDIN_INBOUND' as const,
+      status: 'ACTIVE' as const,
+      seniorityLevel: 'DIRECTOR' as const,
+      marketSegment: 'BANK' as const,
+      ownerEmail: 'alwheelock@sysde.com',
+      tags: ['High Priority', 'Decision Maker'],
+    },
+    {
+      email: 'carlos.mendoza@cooptest-pe.example',
+      firstName: 'Carlos',
+      lastName: 'Mendoza',
+      jobTitle: 'CIO',
+      companyName: 'Cooperativa Test Perú',
+      country: 'Perú',
+      city: 'Lima',
+      phone: '+51 1 234 5678',
+      source: 'REFERRAL' as const,
+      status: 'NURTURE' as const,
+      seniorityLevel: 'C_LEVEL' as const,
+      marketSegment: 'COOPERATIVE' as const,
+      ownerEmail: 'alwheelock@sysde.com',
+      tags: ['Champion', 'Referred'],
+    },
+    {
+      email: 'andrea.torres@microfin-co.example',
+      firstName: 'Andrea',
+      lastName: 'Torres',
+      jobTitle: 'Gerente de Operaciones',
+      companyName: 'Microfinanzas Test Colombia',
+      country: 'Colombia',
+      city: 'Bogotá',
+      source: 'EVENT' as const,
+      status: 'ACTIVE' as const,
+      seniorityLevel: 'MANAGER' as const,
+      marketSegment: 'MICROFINANCE' as const,
+      tags: ['Event Lead'],
+    },
+    {
+      email: 'juan.solano@financrtest-cr.example',
+      firstName: 'Juan',
+      lastName: 'Solano',
+      jobTitle: 'Subgerente Financiero',
+      companyName: 'Financiera Test Costa Rica',
+      country: 'Costa Rica',
+      city: 'San José',
+      source: 'WEBSITE_FORM' as const,
+      status: 'COLD' as const,
+      seniorityLevel: 'MANAGER' as const,
+      marketSegment: 'FINANCE_COMPANY' as const,
+      tags: ['Cold Lead'],
+    },
+    {
+      email: 'maria.jimenez@banktest-do.example',
+      firstName: 'María',
+      lastName: 'Jiménez',
+      jobTitle: 'VP Tecnología',
+      companyName: 'Banco Test República Dominicana',
+      country: 'República Dominicana',
+      city: 'Santo Domingo',
+      source: 'OUTBOUND_CAMPAIGN' as const,
+      status: 'ACTIVE' as const,
+      seniorityLevel: 'VP' as const,
+      marketSegment: 'BANK' as const,
+      tags: ['RFP Active', 'Decision Maker'],
+    },
+  ];
+
+  for (const c of TEST_CONTACTS) {
+    const { tags, ownerEmail, ...data } = c;
+    const owner = ownerEmail
+      ? await prisma.user.findUnique({ where: { email: ownerEmail } })
+      : null;
+
+    const contact = await prisma.contact.upsert({
+      where: { email: data.email },
+      update: {
+        ...data,
+        fullName: `${data.firstName} ${data.lastName}`,
+        ownerId: owner?.id,
+      },
+      create: {
+        ...data,
+        fullName: `${data.firstName} ${data.lastName}`,
+        ownerId: owner?.id,
+        createdById: owner?.id,
+      },
+    });
+
+    await prisma.contactTag.deleteMany({ where: { contactId: contact.id } });
+    for (const tagName of tags) {
+      const tagId = tagMap.get(tagName);
+      if (!tagId) continue;
+      await prisma.contactTag.create({
+        data: { contactId: contact.id, tagId },
+      });
+    }
+  }
+  console.log(`  ✓ ${TEST_CONTACTS.length} test contacts`);
+
+  // Fake import batches for history
+  console.log('Seeding fake import batches...');
+  const existingBatches = await prisma.importBatch.count();
+  if (existingBatches === 0) {
+    const batches = [
+      {
+        fileName: 'leads-q1-mexico.csv',
+        fileSize: 45_230,
+        totalRows: 120,
+        createdCount: 98,
+        updatedCount: 12,
+        skippedCount: 8,
+        failedCount: 2,
+        status: 'COMPLETED_WITH_ERRORS' as const,
+        completedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+      },
+      {
+        fileName: 'eventos-fintech-2025.csv',
+        fileSize: 12_800,
+        totalRows: 45,
+        createdCount: 45,
+        updatedCount: 0,
+        skippedCount: 0,
+        failedCount: 0,
+        status: 'COMPLETED' as const,
+        completedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+      },
+      {
+        fileName: 'cooperativas-peru.csv',
+        fileSize: 28_900,
+        totalRows: 67,
+        createdCount: 60,
+        updatedCount: 4,
+        skippedCount: 3,
+        failedCount: 0,
+        status: 'COMPLETED' as const,
+        completedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+      },
+    ];
+    for (const b of batches) {
+      await prisma.importBatch.create({
+        data: {
+          ...b,
+          columnMapping: { email: 'email', first_name: 'firstName', last_name: 'lastName' },
+          dedupeStrategy: 'SKIP',
+          createdById: adminUser.id,
+          startedAt: b.completedAt,
+        },
+      });
+    }
+    console.log(`  ✓ ${batches.length} import batches`);
+  } else {
+    console.log(`  ↩︎  Skipped (${existingBatches} already exist)`);
+  }
+
   console.log('✅ Seed completed successfully.');
 }
 

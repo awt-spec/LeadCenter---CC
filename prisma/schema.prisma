@@ -22,9 +22,12 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  roles         UserRole[]
-  sessions      Session[]
-  auditLogs     AuditLog[]
+  roles             UserRole[]
+  sessions          Session[]
+  auditLogs         AuditLog[]
+  ownedContacts     Contact[]     @relation("ContactOwner")
+  createdContacts   Contact[]     @relation("ContactCreator")
+  importBatches     ImportBatch[]
 
   @@index([email])
 }
@@ -108,23 +111,205 @@ model AuditLog {
   @@index([createdAt])
 }
 
-// ==================== PLACEHOLDERS ====================
+// ==================== ACCOUNTS (placeholder) ====================
 
 model Account {
   id         String   @id @default(cuid())
   name       String
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  contacts   Contact[]
 }
 
+// ==================== CONTACTS ====================
+
 model Contact {
-  id         String   @id @default(cuid())
-  email      String   @unique
-  firstName  String
-  lastName   String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id               String   @id @default(cuid())
+
+  email            String   @unique
+  firstName        String
+  lastName         String
+  fullName         String
+
+  jobTitle         String?
+  department       String?
+  seniorityLevel   SeniorityLevel @default(UNKNOWN)
+
+  companyName      String?
+  accountId        String?
+  account          Account?         @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  country          String?
+  city             String?
+  timezone         String?
+
+  phone            String?
+  mobilePhone      String?
+  linkedinUrl      String?
+  website          String?
+
+  source           ContactSource    @default(UNKNOWN)
+  sourceDetail     String?
+  status           ContactStatus    @default(ACTIVE)
+  ownerId          String?
+  owner            User?            @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  marketSegment    MarketSegment?
+  productInterest  ProductInterest[] @default([])
+
+  optIn            Boolean          @default(false)
+  optInDate        DateTime?
+  doNotContact     Boolean          @default(false)
+
+  lastContactedAt  DateTime?
+  lastActivityAt   DateTime?
+  engagementScore  Int              @default(0)
+
+  notes            String?          @db.Text
+
+  createdById      String?
+  createdBy        User?            @relation("ContactCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  importBatchId    String?
+  importBatch      ImportBatch?     @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  tags             ContactTag[]
+
+  @@index([email])
+  @@index([ownerId])
+  @@index([status])
+  @@index([country])
+  @@index([accountId])
+  @@index([createdAt])
+  @@index([fullName])
 }
+
+enum SeniorityLevel {
+  UNKNOWN
+  ANALYST
+  MANAGER
+  DIRECTOR
+  VP
+  C_LEVEL
+  OWNER
+}
+
+enum ContactSource {
+  UNKNOWN
+  WEBSITE_CHAT
+  WEBSITE_FORM
+  LINKEDIN
+  LINKEDIN_INBOUND
+  LINKEDIN_OUTBOUND
+  EMAIL_INBOUND
+  REFERRAL
+  EVENT
+  WEBINAR
+  OUTBOUND_CAMPAIGN
+  CSV_IMPORT
+  MANUAL
+  PARTNER
+}
+
+enum ContactStatus {
+  ACTIVE
+  NURTURE
+  COLD
+  DO_NOT_CONTACT
+  UNSUBSCRIBED
+  BOUNCED
+  ARCHIVED
+}
+
+enum MarketSegment {
+  BANK
+  FINANCE_COMPANY
+  MICROFINANCE
+  COOPERATIVE
+  PENSION_FUND
+  INSURANCE
+  FINTECH
+  RETAIL
+  CONSULTING
+  OTHER
+}
+
+enum ProductInterest {
+  SAF_PLUS
+  SAF_LEASING
+  SAF_FACTORING
+  FILEMASTER
+  FACTORAJE_ONCLOUD
+  SYSDE_PENSION
+  SENTINEL_PLD
+}
+
+model Tag {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  color       String       @default("#64748B")
+  description String?
+  createdAt   DateTime     @default(now())
+
+  contacts    ContactTag[]
+}
+
+model ContactTag {
+  contactId String
+  tagId     String
+
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, tagId])
+}
+
+// ==================== IMPORT BATCHES ====================
+
+model ImportBatch {
+  id              String            @id @default(cuid())
+  fileName        String
+  fileSize        Int
+  totalRows       Int
+  createdCount    Int               @default(0)
+  updatedCount    Int               @default(0)
+  skippedCount    Int               @default(0)
+  failedCount     Int               @default(0)
+  status          ImportStatus      @default(PENDING)
+  columnMapping   Json
+  dedupeStrategy  DedupeStrategy    @default(SKIP)
+  defaultValues   Json?
+  errors          Json?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdById     String
+  createdBy       User              @relation(fields: [createdById], references: [id])
+  createdAt       DateTime          @default(now())
+
+  contacts        Contact[]
+
+  @@index([createdById])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED
+}
+
+enum DedupeStrategy {
+  SKIP
+  UPDATE
+  CREATE_NEW
+}
+
+// ==================== OPPORTUNITIES (placeholder) ====================
 
 model Opportunity {
   id         String   @id @default(cuid())
