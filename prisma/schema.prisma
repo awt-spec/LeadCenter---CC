@@ -22,12 +22,17 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  roles             UserRole[]
-  sessions          Session[]
-  auditLogs         AuditLog[]
-  ownedContacts     Contact[]     @relation("ContactOwner")
-  createdContacts   Contact[]     @relation("ContactCreator")
-  importBatches     ImportBatch[]
+  roles                  UserRole[]
+  sessions               Session[]
+  auditLogs              AuditLog[]
+  ownedContacts          Contact[]       @relation("ContactOwner")
+  createdContacts        Contact[]       @relation("ContactCreator")
+  importBatches          ImportBatch[]
+  ownedAccounts          Account[]       @relation("AccountOwner")
+  createdAccounts        Account[]       @relation("AccountCreator")
+  ownedOpportunities     Opportunity[]   @relation("OpportunityOwner")
+  createdOpportunities   Opportunity[]   @relation("OpportunityCreator")
+  stageChanges           StageHistory[]
 
   @@index([email])
 }
@@ -111,15 +116,71 @@ model AuditLog {
   @@index([createdAt])
 }
 
-// ==================== ACCOUNTS (placeholder) ====================
+// ==================== ACCOUNTS ====================
 
 model Account {
-  id         String   @id @default(cuid())
-  name       String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id               String   @id @default(cuid())
 
-  contacts   Contact[]
+  name             String
+  legalName        String?
+  domain           String?  @unique
+  website          String?
+
+  segment          MarketSegment?
+  industry         String?
+  subIndustry      String?
+  size             CompanySize    @default(UNKNOWN)
+  employeeCount    Int?
+  annualRevenue    Decimal?       @db.Decimal(18, 2)
+  currency         String         @default("USD")
+
+  country          String?
+  region           String?
+  city             String?
+  address          String?
+
+  status           AccountStatus  @default(PROSPECT)
+  ownerId          String?
+  owner            User?          @relation("AccountOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  parentAccountId  String?
+  parentAccount    Account?       @relation("AccountHierarchy", fields: [parentAccountId], references: [id], onDelete: SetNull)
+  childAccounts    Account[]      @relation("AccountHierarchy")
+
+  description      String?        @db.Text
+  internalNotes    String?        @db.Text
+
+  createdById      String?
+  createdBy        User?          @relation("AccountCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  contacts         Contact[]
+  opportunities    Opportunity[]
+
+  @@index([name])
+  @@index([domain])
+  @@index([ownerId])
+  @@index([country])
+  @@index([status])
+}
+
+enum CompanySize {
+  UNKNOWN
+  MICRO
+  SMALL
+  MEDIUM
+  LARGE
+  ENTERPRISE
+}
+
+enum AccountStatus {
+  PROSPECT
+  ACTIVE
+  CUSTOMER
+  PARTNER
+  LOST
+  INACTIVE
+  BLOCKED
 }
 
 // ==================== CONTACTS ====================
@@ -176,6 +237,7 @@ model Contact {
   updatedAt        DateTime         @updatedAt
 
   tags             ContactTag[]
+  opportunityRoles OpportunityContact[]
 
   @@index([email])
   @@index([ownerId])
@@ -309,11 +371,195 @@ enum DedupeStrategy {
   CREATE_NEW
 }
 
-// ==================== OPPORTUNITIES (placeholder) ====================
+// ==================== OPPORTUNITIES ====================
 
 model Opportunity {
-  id         String   @id @default(cuid())
-  name       String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id                  String   @id @default(cuid())
+
+  name                String
+  code                String?  @unique
+
+  accountId           String
+  account             Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  product             SysdeProduct
+  subProduct          SysdeSubProduct?
+
+  stage               OpportunityStage  @default(LEAD)
+  stageChangedAt      DateTime          @default(now())
+  previousStage       OpportunityStage?
+  status              OpportunityStatus @default(OPEN)
+
+  rating              OpportunityRating @default(UNSCORED)
+  probability         Int               @default(10)
+
+  estimatedValue      Decimal?          @db.Decimal(18, 2)
+  currency            String            @default("USD")
+  commercialModel     CommercialModel   @default(UNDEFINED)
+
+  portfolioAmount     Decimal?          @db.Decimal(18, 2)
+  userCount           Int?
+  annualOperations    Int?
+  clientCount         Int?
+  officeCount         Int?
+
+  expectedCloseDate   DateTime?
+  closedAt            DateTime?
+  nextActionDate      DateTime?
+  nextActionNote      String?
+
+  source              ContactSource     @default(UNKNOWN)
+  sourceDetail        String?
+  isDirectProspecting Boolean           @default(false)
+  referredById        String?
+
+  lostReason          LostReason?
+  lostReasonDetail    String?
+  competitorWon       String?
+  wonReason           String?
+
+  ownerId             String?
+  owner               User?             @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  description         String?           @db.Text
+  internalNotes       String?           @db.Text
+
+  createdById         String?
+  createdBy           User?             @relation("OpportunityCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  contactRoles        OpportunityContact[]
+  stageHistory        StageHistory[]
+
+  @@index([accountId])
+  @@index([ownerId])
+  @@index([stage])
+  @@index([status])
+  @@index([product])
+  @@index([expectedCloseDate])
+  @@index([createdAt])
+}
+
+enum OpportunityStage {
+  LEAD
+  DISCOVERY
+  SIZING
+  DEMO
+  PROPOSAL
+  NEGOTIATION
+  CLOSING
+  HANDOFF
+  WON
+  LOST
+  STAND_BY
+  NURTURE
+}
+
+enum OpportunityStatus {
+  OPEN
+  WON
+  LOST
+  STAND_BY
+  NURTURE
+}
+
+enum OpportunityRating {
+  UNSCORED
+  A_PLUS
+  A
+  B_PLUS
+  B
+  C
+  D
+}
+
+enum SysdeProduct {
+  SAF_PLUS
+  FILEMASTER
+  FACTORAJE_ONCLOUD
+  SYSDE_PENSION
+  SENTINEL_PLD
+  CUSTOM
+}
+
+enum SysdeSubProduct {
+  SAF_CREDIT
+  SAF_LEASING
+  SAF_FACTORING
+  SAF_FULL
+  FM_DOCUMENTS
+  FM_BPM
+  FM_FULL
+  PENSION_RECORDKEEPING
+  PLD_FULL
+  PLD_MONITORING
+  FACTORAJE_REVERSE
+  FACTORAJE_DIRECT
+  NONE
+}
+
+enum CommercialModel {
+  UNDEFINED
+  SAAS
+  ON_PREMISE
+  HYBRID
+  LICENSE_PERPETUAL
+  TIME_AND_MATERIALS
+}
+
+enum LostReason {
+  PRICE
+  COMPETITOR
+  TIMING
+  NO_BUDGET
+  NO_DECISION
+  NO_FIT
+  INTERNAL_DEV
+  NO_RESPONSE
+  PROJECT_CANCELLED
+  OTHER
+}
+
+model OpportunityContact {
+  opportunityId String
+  contactId     String
+  role          ContactRole  @default(INFLUENCER)
+  isPrimary     Boolean      @default(false)
+  notes         String?
+  addedAt       DateTime     @default(now())
+
+  opportunity   Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  contact       Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([opportunityId, contactId])
+  @@index([contactId])
+}
+
+enum ContactRole {
+  SPONSOR
+  DECISION_MAKER
+  CHAMPION
+  TECHNICAL_BUYER
+  USER
+  INFLUENCER
+  BLOCKER
+  GATEKEEPER
+}
+
+model StageHistory {
+  id                  String           @id @default(cuid())
+  opportunityId       String
+  fromStage           OpportunityStage?
+  toStage             OpportunityStage
+  changedById         String?
+  changedAt           DateTime         @default(now())
+  daysInPreviousStage Int?
+  notes               String?
+
+  opportunity         Opportunity      @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  changedBy           User?            @relation(fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([opportunityId])
+  @@index([changedAt])
 }

@@ -420,6 +420,168 @@ async function main() {
     console.log(`  ↩︎  Skipped (${existingBatches} already exist)`);
   }
 
+  // Accounts
+  console.log('Seeding accounts...');
+  const ACCOUNTS = [
+    { key: 'banco-horizonte', name: 'Banco Horizonte', domain: 'bancohorizonte.example', country: 'México', segment: 'BANK' as const, size: 'LARGE' as const, status: 'ACTIVE' as const, employeeCount: 850, city: 'Ciudad de México', region: 'LATAM' },
+    { key: 'financiera-andina', name: 'Financiera Andina', domain: 'fandina.example', country: 'Perú', segment: 'FINANCE_COMPANY' as const, size: 'MEDIUM' as const, status: 'ACTIVE' as const, employeeCount: 180, city: 'Lima', region: 'LATAM' },
+    { key: 'cooperahorro', name: 'CooperAhorro', domain: 'cooperahorro.example', country: 'Colombia', segment: 'COOPERATIVE' as const, size: 'MEDIUM' as const, status: 'PROSPECT' as const, employeeCount: 120, city: 'Bogotá', region: 'LATAM' },
+    { key: 'microcredito-sur', name: 'MicroCrédito del Sur', domain: 'microsur.example', country: 'Guatemala', segment: 'MICROFINANCE' as const, size: 'SMALL' as const, status: 'ACTIVE' as const, employeeCount: 40, city: 'Ciudad de Guatemala', region: 'CENTRAL_AMERICA' },
+    { key: 'fondo-pensiones-central', name: 'Fondo Pensiones Central', domain: 'fpc.example', country: 'Costa Rica', segment: 'PENSION_FUND' as const, size: 'LARGE' as const, status: 'PROSPECT' as const, employeeCount: 310, city: 'San José', region: 'CENTRAL_AMERICA' },
+    { key: 'grupo-atlantico', name: 'Grupo Financiero Atlántico', domain: 'atlantico.example', country: 'República Dominicana', segment: 'BANK' as const, size: 'ENTERPRISE' as const, status: 'ACTIVE' as const, employeeCount: 2200, city: 'Santo Domingo', region: 'CARIBBEAN' },
+    { key: 'seguros-tropical', name: 'Seguros Tropical', domain: 'strop.example', country: 'Panamá', segment: 'INSURANCE' as const, size: 'MEDIUM' as const, status: 'PROSPECT' as const, employeeCount: 240, city: 'Ciudad de Panamá', region: 'CENTRAL_AMERICA' },
+    { key: 'retail-credit-plaza', name: 'Retail Credit Plaza', domain: 'rcplaza.example', country: 'El Salvador', segment: 'RETAIL' as const, size: 'MEDIUM' as const, status: 'ACTIVE' as const, employeeCount: 150, city: 'San Salvador', region: 'CENTRAL_AMERICA' },
+  ];
+
+  const accountMap = new Map<string, string>();
+  for (const a of ACCOUNTS) {
+    const { key, ...data } = a;
+    const acc = await prisma.account.upsert({
+      where: { domain: data.domain! },
+      update: data,
+      create: { ...data, ownerId: adminUser.id, createdById: adminUser.id },
+    });
+    accountMap.set(key, acc.id);
+  }
+
+  // Subsidiarias de Grupo Atlántico
+  const parentId = accountMap.get('grupo-atlantico')!;
+  const subs = [
+    { key: 'atlantico-banca', name: 'Atlántico Banca Personal', domain: 'banca.atlantico.example' },
+    { key: 'atlantico-empresas', name: 'Atlántico Empresas', domain: 'empresas.atlantico.example' },
+  ];
+  for (const s of subs) {
+    const sub = await prisma.account.upsert({
+      where: { domain: s.domain },
+      update: { name: s.name, parentAccountId: parentId },
+      create: {
+        name: s.name,
+        domain: s.domain,
+        country: 'República Dominicana',
+        segment: 'BANK',
+        size: 'LARGE',
+        status: 'ACTIVE',
+        parentAccountId: parentId,
+        ownerId: adminUser.id,
+        createdById: adminUser.id,
+      },
+    });
+    accountMap.set(s.key, sub.id);
+  }
+  console.log(`  ✓ ${ACCOUNTS.length + subs.length} accounts`);
+
+  // Opportunities
+  console.log('Seeding opportunities...');
+  const existingOpps = await prisma.opportunity.count();
+  if (existingOpps === 0) {
+    const year = new Date().getFullYear();
+    let seq = 0;
+    const code = () => {
+      seq += 1;
+      return `OPP-${year}-${String(seq).padStart(4, '0')}`;
+    };
+
+    const OPPS = [
+      { accountKey: 'banco-horizonte', name: 'SAF+ Full para banca retail', stage: 'LEAD' as const, product: 'SAF_PLUS' as const, subProduct: 'SAF_FULL' as const, rating: 'A_PLUS' as const, value: 750000 },
+      { accountKey: 'financiera-andina', name: 'Upgrade SAF+ Crédito', stage: 'LEAD' as const, product: 'SAF_PLUS' as const, subProduct: 'SAF_CREDIT' as const, rating: 'B' as const, value: 180000 },
+      { accountKey: 'cooperahorro', name: 'FileMaster BPM cooperativa', stage: 'DISCOVERY' as const, product: 'FILEMASTER' as const, subProduct: 'FM_BPM' as const, rating: 'A' as const, value: 220000 },
+      { accountKey: 'microcredito-sur', name: 'SAF+ Leasing microfinanzas', stage: 'DISCOVERY' as const, product: 'SAF_PLUS' as const, subProduct: 'SAF_LEASING' as const, rating: 'B_PLUS' as const, value: 95000 },
+      { accountKey: 'fondo-pensiones-central', name: 'SYSDE Pensión — recordkeeping', stage: 'SIZING' as const, product: 'SYSDE_PENSION' as const, subProduct: 'PENSION_RECORDKEEPING' as const, rating: 'A_PLUS' as const, value: 600000 },
+      { accountKey: 'grupo-atlantico', name: 'Sentinel PLD corporativo', stage: 'DEMO' as const, product: 'SENTINEL_PLD' as const, subProduct: 'PLD_FULL' as const, rating: 'A' as const, value: 480000 },
+      { accountKey: 'atlantico-empresas', name: 'Factoraje OnCloud empresarial', stage: 'DEMO' as const, product: 'FACTORAJE_ONCLOUD' as const, subProduct: 'FACTORAJE_REVERSE' as const, rating: 'B_PLUS' as const, value: 310000 },
+      { accountKey: 'seguros-tropical', name: 'FileMaster Full aseguradora', stage: 'PROPOSAL' as const, product: 'FILEMASTER' as const, subProduct: 'FM_FULL' as const, rating: 'A' as const, value: 420000 },
+      { accountKey: 'retail-credit-plaza', name: 'SAF+ Crédito retail', stage: 'PROPOSAL' as const, product: 'SAF_PLUS' as const, subProduct: 'SAF_CREDIT' as const, rating: 'B' as const, value: 160000 },
+      { accountKey: 'banco-horizonte', name: 'PLD Monitoring fase 2', stage: 'NEGOTIATION' as const, product: 'SENTINEL_PLD' as const, subProduct: 'PLD_MONITORING' as const, rating: 'A_PLUS' as const, value: 290000 },
+      { accountKey: 'financiera-andina', name: 'Factoraje directo PYMEs', stage: 'WON' as const, product: 'FACTORAJE_ONCLOUD' as const, subProduct: 'FACTORAJE_DIRECT' as const, rating: 'A' as const, value: 140000, status: 'WON' as const },
+      { accountKey: 'cooperahorro', name: 'POC SAF+ Factoring', stage: 'LOST' as const, product: 'SAF_PLUS' as const, subProduct: 'SAF_FACTORING' as const, rating: 'C' as const, value: 85000, status: 'LOST' as const, lostReason: 'NO_BUDGET' as const },
+    ];
+
+    const allContacts = await prisma.contact.findMany({ select: { id: true } });
+    const contactIds = allContacts.map((c) => c.id);
+
+    for (const o of OPPS) {
+      const accountId = accountMap.get(o.accountKey);
+      if (!accountId) continue;
+      const probability =
+        { LEAD: 5, DISCOVERY: 15, SIZING: 25, DEMO: 40, PROPOSAL: 60, NEGOTIATION: 75, CLOSING: 90, HANDOFF: 95, WON: 100, LOST: 0, STAND_BY: 10, NURTURE: 5 }[o.stage];
+
+      const expectedClose = new Date();
+      expectedClose.setDate(expectedClose.getDate() + Math.floor(Math.random() * 120) + 30);
+
+      const opp = await prisma.opportunity.create({
+        data: {
+          name: o.name,
+          code: code(),
+          accountId,
+          product: o.product,
+          subProduct: o.subProduct,
+          stage: o.stage,
+          status: o.status ?? 'OPEN',
+          rating: o.rating,
+          probability,
+          estimatedValue: o.value,
+          currency: 'USD',
+          expectedCloseDate: expectedClose,
+          closedAt: o.status === 'WON' || o.status === 'LOST' ? new Date() : null,
+          lostReason: o.lostReason,
+          lostReasonDetail: o.lostReason ? 'Ajuste presupuestal para 2026' : null,
+          wonReason: o.status === 'WON' ? 'Mejor propuesta técnica y comercial' : null,
+          source: 'REFERRAL',
+          ownerId: adminUser.id,
+          createdById: adminUser.id,
+          commercialModel: 'SAAS',
+          nextActionDate: o.status === 'OPEN' ? new Date(Date.now() + 5 * 24 * 60 * 60 * 1000) : null,
+          nextActionNote: o.status === 'OPEN' ? 'Siguiente reunión con sponsor' : null,
+        },
+      });
+
+      // Link 1-2 random contacts with varied roles
+      const rolesByIdx: Array<'SPONSOR' | 'DECISION_MAKER' | 'CHAMPION' | 'INFLUENCER' | 'TECHNICAL_BUYER'> = [
+        'DECISION_MAKER',
+        'CHAMPION',
+      ];
+      const pick = contactIds.sort(() => 0.5 - Math.random()).slice(0, 2);
+      for (let i = 0; i < pick.length; i++) {
+        await prisma.opportunityContact.create({
+          data: {
+            opportunityId: opp.id,
+            contactId: pick[i]!,
+            role: rolesByIdx[i] ?? 'INFLUENCER',
+            isPrimary: i === 0,
+          },
+        });
+      }
+
+      // Fake stage history
+      await prisma.stageHistory.create({
+        data: {
+          opportunityId: opp.id,
+          fromStage: null,
+          toStage: 'LEAD',
+          changedById: adminUser.id,
+          changedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
+          notes: 'Oportunidad creada',
+        },
+      });
+      if (o.stage !== 'LEAD') {
+        await prisma.stageHistory.create({
+          data: {
+            opportunityId: opp.id,
+            fromStage: 'LEAD',
+            toStage: o.stage,
+            changedById: adminUser.id,
+            changedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+            daysInPreviousStage: 15,
+            notes: 'Avance inicial tras calificación',
+          },
+        });
+      }
+    }
+    console.log(`  ✓ ${OPPS.length} opportunities`);
+  } else {
+    console.log(`  ↩︎  Skipped (${existingOpps} already exist)`);
+  }
+
   console.log('✅ Seed completed successfully.');
 }
 
