@@ -33,6 +33,10 @@ model User {
   ownedOpportunities     Opportunity[]   @relation("OpportunityOwner")
   createdOpportunities   Opportunity[]   @relation("OpportunityCreator")
   stageChanges           StageHistory[]
+  createdActivities      Activity[]          @relation("ActivityCreator")
+  nextActionAssignments  Activity[]          @relation("NextActionAssignee")
+  mentions               ActivityMention[]   @relation("ActivityMentions")
+  notifications          Notification[]
 
   @@index([email])
 }
@@ -156,6 +160,7 @@ model Account {
 
   contacts         Contact[]
   opportunities    Opportunity[]
+  activities       Activity[]
 
   @@index([name])
   @@index([domain])
@@ -238,6 +243,8 @@ model Contact {
 
   tags             ContactTag[]
   opportunityRoles OpportunityContact[]
+  activities       Activity[]
+  participantIn    ActivityParticipant[]
 
   @@index([email])
   @@index([ownerId])
@@ -431,6 +438,7 @@ model Opportunity {
 
   contactRoles        OpportunityContact[]
   stageHistory        StageHistory[]
+  activities          Activity[]
 
   @@index([accountId])
   @@index([ownerId])
@@ -562,4 +570,182 @@ model StageHistory {
 
   @@index([opportunityId])
   @@index([changedAt])
+}
+
+// ==================== ACTIVITIES ====================
+
+model Activity {
+  id                    String          @id @default(cuid())
+
+  type                  ActivityType
+  subtype               String?
+  subject               String
+  bodyJson              Json?
+  bodyText              String?         @db.Text
+
+  tags                  ActivityTag[]   @default([])
+
+  occurredAt            DateTime        @default(now())
+  durationMinutes       Int?
+
+  contactId             String?
+  contact               Contact?        @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  accountId             String?
+  account               Account?        @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  opportunityId         String?
+  opportunity           Opportunity?    @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  participants          ActivityParticipant[]
+  mentions              ActivityMention[]
+
+  nextActionType        NextActionType?
+  nextActionNote        String?
+  nextActionDate        DateTime?
+  nextActionAssigneeId  String?
+  nextActionAssignee    User?           @relation("NextActionAssignee", fields: [nextActionAssigneeId], references: [id], onDelete: SetNull)
+  nextActionCompleted   Boolean         @default(false)
+  nextActionCompletedAt DateTime?
+
+  outcome               ActivityOutcome?
+
+  attachments           ActivityAttachment[]
+
+  isSystemGenerated     Boolean         @default(false)
+  systemEventType       String?
+  systemMetadata        Json?
+
+  templateKey           String?
+
+  createdById           String
+  createdBy             User            @relation("ActivityCreator", fields: [createdById], references: [id])
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  @@index([contactId])
+  @@index([accountId])
+  @@index([opportunityId])
+  @@index([createdById])
+  @@index([occurredAt])
+  @@index([type])
+  @@index([nextActionDate])
+}
+
+enum ActivityType {
+  CALL
+  EMAIL_SENT
+  EMAIL_RECEIVED
+  WHATSAPP
+  MEETING
+  DEMO
+  MATERIAL_SENT
+  PROPOSAL_SENT
+  INTERNAL_NOTE
+  TASK
+  STAGE_CHANGE
+  CONTACT_LINKED
+  STATUS_CHANGE
+  FILE_SHARED
+  LINKEDIN_MESSAGE
+  EVENT_ATTENDED
+}
+
+enum ActivityTag {
+  BL
+  INFO
+  CONSUL
+  SOLIC
+  URGENT
+  FOLLOWUP
+  WIN_SIGNAL
+  RISK_SIGNAL
+}
+
+enum ActivityOutcome {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+  BLOCKER
+  NO_RESPONSE
+}
+
+enum NextActionType {
+  CALL
+  EMAIL
+  WHATSAPP
+  MEETING
+  DEMO
+  SEND_PROPOSAL
+  SEND_MATERIAL
+  INTERNAL_TASK
+  WAIT_FOR_CLIENT
+  OTHER
+}
+
+model ActivityParticipant {
+  activityId String
+  contactId  String
+  role       String?
+
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  contact    Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([activityId, contactId])
+}
+
+model ActivityMention {
+  activityId      String
+  mentionedUserId String
+  readAt          DateTime?
+
+  activity        Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  mentionedUser   User     @relation("ActivityMentions", fields: [mentionedUserId], references: [id], onDelete: Cascade)
+
+  @@id([activityId, mentionedUserId])
+  @@index([mentionedUserId, readAt])
+}
+
+model ActivityAttachment {
+  id         String   @id @default(cuid())
+  activityId String
+  fileName   String
+  fileUrl    String
+  fileSize   Int
+  mimeType   String
+  uploadedAt DateTime @default(now())
+
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@index([activityId])
+}
+
+// ==================== NOTIFICATIONS ====================
+
+model Notification {
+  id         String   @id @default(cuid())
+  userId     String
+  type       NotificationType
+  title      String
+  body       String?
+  link       String?
+  isRead     Boolean  @default(false)
+  readAt     DateTime?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+enum NotificationType {
+  MENTION
+  ASSIGNED_NEXT_ACTION
+  NEXT_ACTION_DUE
+  OPPORTUNITY_STALE
+  STAGE_CHANGED
+  CONTACT_ASSIGNED
+  SYSTEM
 }
