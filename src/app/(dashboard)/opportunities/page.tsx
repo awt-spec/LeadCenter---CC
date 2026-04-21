@@ -1,14 +1,8 @@
 import Link from 'next/link';
-import { Briefcase, Plus } from 'lucide-react';
+import { Briefcase, LayoutGrid, Plus, Table as TableIcon } from 'lucide-react';
 import { auth } from '@/lib/auth';
 import { can } from '@/lib/rbac';
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { Forbidden } from '@/components/shared/forbidden';
 import { EmptyState } from '@/components/shared/empty-state';
 import { listCountries, listUsers } from '@/lib/contacts/queries';
@@ -92,25 +86,20 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
         </div>
         <div className="flex items-center gap-2">
           <div className="inline-flex rounded-lg border border-sysde-border bg-white p-1 text-sm">
-            <button type="button" className="rounded-md bg-sysde-bg px-3 py-1 font-medium text-sysde-gray">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-md bg-sysde-bg px-3 py-1 font-medium text-sysde-gray"
+            >
+              <TableIcon className="h-3.5 w-3.5" />
               Tabla
             </button>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>
-                    <button
-                      type="button"
-                      disabled
-                      className="rounded-md px-3 py-1 text-sysde-mid opacity-60"
-                    >
-                      Kanban
-                    </button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>Próximamente (siguiente fase)</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Link
+              href="/pipeline"
+              className="inline-flex items-center gap-1.5 rounded-md px-3 py-1 font-medium text-sysde-mid transition-colors hover:bg-sysde-bg hover:text-sysde-gray"
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              Kanban
+            </Link>
           </div>
           {canCreate && (
             <Button asChild>

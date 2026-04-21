@@ -494,12 +494,26 @@ async function main() {
       { accountKey: 'banco-horizonte', name: 'PLD Monitoring fase 2', stage: 'NEGOTIATION' as const, product: 'SENTINEL_PLD' as const, subProduct: 'PLD_MONITORING' as const, rating: 'A_PLUS' as const, value: 290000 },
       { accountKey: 'financiera-andina', name: 'Factoraje directo PYMEs', stage: 'WON' as const, product: 'FACTORAJE_ONCLOUD' as const, subProduct: 'FACTORAJE_DIRECT' as const, rating: 'A' as const, value: 140000, status: 'WON' as const },
       { accountKey: 'cooperahorro', name: 'POC SAF+ Factoring', stage: 'LOST' as const, product: 'SAF_PLUS' as const, subProduct: 'SAF_FACTORING' as const, rating: 'C' as const, value: 85000, status: 'LOST' as const, lostReason: 'NO_BUDGET' as const },
+
+      // Pipeline fill (10 adicionales)
+      { accountKey: 'microcredito-sur', name: 'FileMaster Documentos microfinanzas', stage: 'DISCOVERY' as const, product: 'FILEMASTER' as const, subProduct: 'FM_DOCUMENTS' as const, rating: 'B' as const, value: 42000 },
+      { accountKey: 'retail-credit-plaza', name: 'Sentinel PLD retail', stage: 'DISCOVERY' as const, product: 'SENTINEL_PLD' as const, subProduct: 'PLD_MONITORING' as const, rating: 'B_PLUS' as const, value: 135000 },
+      { accountKey: 'atlantico-banca', name: 'SAF+ Full banca personal', stage: 'DISCOVERY' as const, product: 'SAF_PLUS' as const, subProduct: 'SAF_FULL' as const, rating: 'A' as const, value: 880000 },
+      { accountKey: 'seguros-tropical', name: 'SYSDE Pensión — evaluación', stage: 'DEMO' as const, product: 'SYSDE_PENSION' as const, subProduct: 'PENSION_RECORDKEEPING' as const, rating: 'B_PLUS' as const, value: 230000 },
+      { accountKey: 'fondo-pensiones-central', name: 'Sentinel PLD pensional', stage: 'DEMO' as const, product: 'SENTINEL_PLD' as const, subProduct: 'PLD_FULL' as const, rating: 'A' as const, value: 390000 },
+      { accountKey: 'cooperahorro', name: 'Factoraje OnCloud cooperativa', stage: 'DEMO' as const, product: 'FACTORAJE_ONCLOUD' as const, subProduct: 'FACTORAJE_REVERSE' as const, rating: 'C' as const, value: 78000 },
+      { accountKey: 'banco-horizonte', name: 'FileMaster BPM riesgo', stage: 'NEGOTIATION' as const, product: 'FILEMASTER' as const, subProduct: 'FM_BPM' as const, rating: 'A_PLUS' as const, value: 1_150_000 },
+      { accountKey: 'financiera-andina', name: 'SAF+ Leasing automotriz', stage: 'NEGOTIATION' as const, product: 'SAF_PLUS' as const, subProduct: 'SAF_LEASING' as const, rating: 'B_PLUS' as const, value: 265000 },
+      { accountKey: 'microcredito-sur', name: 'Factoraje OnCloud POC', stage: 'CLOSING' as const, product: 'FACTORAJE_ONCLOUD' as const, subProduct: 'FACTORAJE_DIRECT' as const, rating: 'A' as const, value: 52000 },
+      { accountKey: 'retail-credit-plaza', name: 'SAF+ Factoring retail', stage: 'HANDOFF' as const, product: 'SAF_PLUS' as const, subProduct: 'SAF_FACTORING' as const, rating: 'A' as const, value: 310000 },
     ];
 
     const allContacts = await prisma.contact.findMany({ select: { id: true } });
     const contactIds = allContacts.map((c) => c.id);
 
+    let oppIndex = 0;
     for (const o of OPPS) {
+      oppIndex++;
       const accountId = accountMap.get(o.accountKey);
       if (!accountId) continue;
       const probability =
@@ -507,6 +521,13 @@ async function main() {
 
       const expectedClose = new Date();
       expectedClose.setDate(expectedClose.getDate() + Math.floor(Math.random() * 120) + 30);
+
+      // Variar próximas acciones: algunas vencidas, algunas hoy, algunas futuras
+      let nextAction: Date | null = null;
+      if (o.status !== 'WON' && o.status !== 'LOST') {
+        const offset = (oppIndex % 5) - 2; // -2, -1, 0, 1, 2 días
+        nextAction = new Date(Date.now() + offset * 24 * 60 * 60 * 1000);
+      }
 
       const opp = await prisma.opportunity.create({
         data: {
@@ -530,8 +551,8 @@ async function main() {
           ownerId: adminUser.id,
           createdById: adminUser.id,
           commercialModel: 'SAAS',
-          nextActionDate: o.status === 'OPEN' ? new Date(Date.now() + 5 * 24 * 60 * 60 * 1000) : null,
-          nextActionNote: o.status === 'OPEN' ? 'Siguiente reunión con sponsor' : null,
+          nextActionDate: nextAction,
+          nextActionNote: nextAction ? 'Siguiente reunión con sponsor' : null,
         },
       });
 

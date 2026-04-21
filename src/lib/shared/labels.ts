@@ -199,3 +199,23 @@ export function formatMoney(value: number | string | null | undefined, currency 
     maximumFractionDigits: 0,
   }).format(n);
 }
+
+export function formatMoneyCompact(value: number | null | undefined, currency = 'USD'): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  const abs = Math.abs(value);
+  let formatted: string;
+  if (abs >= 1_000_000) formatted = `${(value / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  else if (abs >= 1_000) formatted = `${Math.round(value / 1_000)}k`;
+  else formatted = value.toFixed(0);
+  const symbol = currency === 'USD' ? '$' : '';
+  return `${symbol}${formatted}`;
+}
+
+export const PRODUCT_CARD_COLORS: Record<string, { bg: string; text: string }> = {
+  SAF_PLUS: { bg: '#FEE2E2', text: '#B91C1C' },
+  FILEMASTER: { bg: '#E0E7FF', text: '#3730A3' },
+  FACTORAJE_ONCLOUD: { bg: '#D1FAE5', text: '#065F46' },
+  SYSDE_PENSION: { bg: '#FEF3C7', text: '#92400E' },
+  SENTINEL_PLD: { bg: '#FCE7F3', text: '#BE185D' },
+  CUSTOM: { bg: '#F3F4F6', text: '#4B5563' },
+};
