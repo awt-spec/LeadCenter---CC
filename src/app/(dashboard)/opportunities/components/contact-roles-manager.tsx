@@ -71,6 +71,7 @@ export function ContactRolesManager({ opportunityId, roles, allContacts, canEdit
       contactId: selectedContactId,
       role,
       isPrimary,
+      notes: null,
     });
     setSubmitting(false);
     if (!res.ok) {

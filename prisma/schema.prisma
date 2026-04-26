@@ -198,6 +198,7 @@ model Contact {
   lastName         String
   fullName         String
 
+  avatarUrl        String?
   jobTitle         String?
   department       String?
   seniorityLevel   SeniorityLevel @default(UNKNOWN)
@@ -412,6 +413,7 @@ model Opportunity {
 
   expectedCloseDate   DateTime?
   closedAt            DateTime?
+  lastActivityAt      DateTime?
   nextActionDate      DateTime?
   nextActionNote      String?
 

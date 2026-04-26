@@ -89,11 +89,11 @@ export function StageChangeDialog({ opportunity, open, onOpenChange }: Props) {
     setSubmitting(true);
     const res = await changeStage(opportunity.id, {
       toStage,
-      notes: notes || undefined,
+      notes: notes || null,
       lostReason: lostReason || undefined,
-      lostReasonDetail: toStage === 'LOST' ? lostReasonDetail || undefined : undefined,
-      competitorWon: toStage === 'LOST' ? competitorWon || undefined : undefined,
-      wonReason: toStage === 'WON' ? wonReason || undefined : undefined,
+      lostReasonDetail: toStage === 'LOST' ? lostReasonDetail || null : null,
+      competitorWon: toStage === 'LOST' ? competitorWon || null : null,
+      wonReason: toStage === 'WON' ? wonReason || null : null,
     });
     setSubmitting(false);
 

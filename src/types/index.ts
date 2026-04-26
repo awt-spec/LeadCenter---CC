@@ -1,4 +1,5 @@
 import type { DefaultSession } from 'next-auth';
+import 'next-auth/jwt';
 
 export interface SessionUserExtras {
   id: string;

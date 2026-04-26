@@ -386,7 +386,9 @@ export function ContactsTable({
         }
         confirmLabel="Sí, eliminar"
         destructive
-        onConfirm={() => confirmDelete && handleDelete(confirmDelete.id)}
+        onConfirm={async () => {
+          if (confirmDelete) await handleDelete(confirmDelete.id);
+        }}
       />
     </div>
   );

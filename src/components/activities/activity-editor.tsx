@@ -42,11 +42,7 @@ export function ActivityEditor({
                   'inline-flex items-center rounded-full bg-sysde-red-light px-2 py-0.5 text-sm font-medium text-sysde-red',
               },
               suggestion,
-              renderHTML: ({ options, node }) =>
-                `${options.suggestion.char}${
-                  node.attrs.label ?? node.attrs.id
-                }`,
-            } as unknown as Parameters<typeof Mention.configure>[0]),
+            }),
           ]),
     ],
     content: value ?? { type: 'doc', content: [{ type: 'paragraph' }] },

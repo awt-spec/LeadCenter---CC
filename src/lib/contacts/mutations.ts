@@ -385,13 +385,14 @@ export async function processImport(
             return;
           }
 
+          const baseData = buildContactDataFromRow(mapped, body, session.user.id, false);
           const created = await prisma.contact.create({
             data: {
+              ...(baseData as Prisma.ContactUncheckedCreateInput),
               email: emailNormalized,
               firstName: mapped.firstName!,
               lastName: mapped.lastName!,
               fullName: `${mapped.firstName} ${mapped.lastName}`,
-              ...buildContactDataFromRow(mapped, body, session.user.id, false),
               createdById: session.user.id,
               importBatchId: batch.id,
             },
@@ -502,7 +503,7 @@ function buildContactDataFromRow(
   body: ImportOptionsInput,
   userId: string,
   isUpdate: boolean
-): Prisma.ContactUpdateInput {
+): Prisma.ContactUncheckedUpdateInput {
   const seniority = mapped.seniorityLevel
     ? (Object.values(SeniorityLevel).find(
         (s) => s.toLowerCase() === mapped.seniorityLevel!.toLowerCase()
@@ -519,7 +520,7 @@ function buildContactDataFromRow(
       ) as MarketSegment | undefined)
     : undefined;
 
-  const data: Prisma.ContactUpdateInput = {
+  const data: Prisma.ContactUncheckedUpdateInput = {
     jobTitle: mapped.jobTitle,
     companyName: mapped.companyName,
     country: mapped.country,
@@ -532,9 +533,7 @@ function buildContactDataFromRow(
     sourceDetail: mapped.sourceDetail,
     notes: mapped.notes,
     status: body.defaultStatus as ContactStatus,
-    owner: body.defaultOwnerId
-      ? { connect: { id: body.defaultOwnerId } }
-      : { connect: { id: userId } },
+    ownerId: body.defaultOwnerId ?? userId,
     optIn: body.markOptIn,
     optInDate: body.markOptIn ? new Date() : undefined,
   };

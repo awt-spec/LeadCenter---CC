@@ -1,4 +1,4 @@
-import type { OpportunityStage, Prisma } from '@prisma/client';
+import type { OpportunityStage, OpportunityStatus, Prisma } from '@prisma/client';
 import type { Session } from 'next-auth';
 import { prisma } from '@/lib/db';
 import { can } from '@/lib/rbac';
@@ -72,7 +72,7 @@ function buildPipelineWhere(session: Session, filters: PipelineFilters): Prisma.
   }
 
   // Default to OPEN only; include closed stages per filter flags
-  const includedStatuses: Prisma.OpportunityStatus[] = ['OPEN'];
+  const includedStatuses: OpportunityStatus[] = ['OPEN'];
   if (filters.includeWon) includedStatuses.push('WON');
   if (filters.includeLost) includedStatuses.push('LOST');
   if (filters.includeStandBy) includedStatuses.push('STAND_BY');
