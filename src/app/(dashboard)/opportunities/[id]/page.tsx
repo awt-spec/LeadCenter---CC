@@ -15,6 +15,11 @@ import {
   getOpportunityById,
   getOpportunityAuditLog,
 } from '@/lib/opportunities/queries';
+import { listActivities, getLatestPendingNextAction } from '@/lib/activities/queries';
+import { activityFilterSchema } from '@/lib/activities/schemas';
+import { listUsers } from '@/lib/contacts/queries';
+import { TimelineWithComposer } from '@/components/activities/timeline-with-composer';
+import { NextActionCard } from '@/components/activities/next-action-card';
 import {
   PRODUCT_LABELS,
   SUB_PRODUCT_LABELS,
@@ -53,6 +58,19 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     orderBy: { fullName: 'asc' },
     take: 200,
   });
+
+  const activityFilters = activityFilterSchema.parse({ includeSystem: true });
+  const [{ rows: activities }, latestPending, allAccountsLite, allOppsLite, usersLite] =
+    await Promise.all([
+      listActivities(session, { opportunityId: id }, activityFilters),
+      getLatestPendingNextAction(id),
+      prisma.account.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 200 }),
+      prisma.opportunity.findMany({ select: { id: true, name: true, code: true }, orderBy: { createdAt: 'desc' }, take: 200 }),
+      listUsers(),
+    ]);
+  const composerContacts = allContacts.map((c) => ({ id: c.id, label: c.fullName }));
+  const composerAccounts = allAccountsLite.map((a) => ({ id: a.id, label: a.name }));
+  const composerOpps = allOppsLite.map((o) => ({ id: o.id, label: `${o.code ?? o.id} · ${o.name}` }));
 
   const estValue = opp.estimatedValue ? Number(opp.estimatedValue) : null;
   const weightedValue = estValue !== null ? estValue * (opp.probability / 100) : null;
@@ -260,14 +278,20 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
             </TabsContent>
 
             <TabsContent value="activity">
-              <Card>
-                <CardHeader><CardTitle>Timeline de actividad</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-sysde-border bg-sysde-bg text-sm text-sysde-mid">
-                    Actividades detalladas disponibles en Fase 2.
-                  </div>
-                </CardContent>
-              </Card>
+              <TimelineWithComposer
+                activities={activities}
+                currentUserId={session.user.id}
+                composerDefaults={{
+                  opportunityId: opp.id,
+                  accountId: opp.account.id,
+                  contactId: opp.contactRoles[0]?.contactId,
+                }}
+                contacts={composerContacts}
+                accounts={composerAccounts}
+                opportunities={composerOpps}
+                users={usersLite.map((u) => ({ id: u.id, name: u.name }))}
+                canCreate={can(session, 'activities:create')}
+              />
             </TabsContent>
 
             <TabsContent value="history">
@@ -343,23 +367,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
 
         {/* Sidebar */}
         <div className="space-y-6">
-          <Card>
-            <CardHeader><CardTitle>Próxima acción</CardTitle></CardHeader>
-            <CardContent>
-              {opp.nextActionDate ? (
-                <div>
-                  <div className={nextActionOverdue ? 'text-sm font-medium text-danger' : 'text-sm font-medium text-sysde-gray'}>
-                    {format(opp.nextActionDate, "d 'de' LLL yyyy", { locale: es })}
-                  </div>
-                  {opp.nextActionNote && (
-                    <p className="mt-1 text-sm text-sysde-mid">{opp.nextActionNote}</p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-sysde-mid">Sin próxima acción definida.</p>
-              )}
-            </CardContent>
-          </Card>
+          <NextActionCard activity={latestPending} currentUserId={session.user.id} />
 
           <Card>
             <CardHeader><CardTitle>Timing</CardTitle></CardHeader>

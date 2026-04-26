@@ -277,6 +277,27 @@ export async function completeNextAction(activityId: string): Promise<ActionResu
     },
   });
 
+  // If linked to an opportunity, refresh its denormalized next action
+  // to point to the next pending activity (or clear it).
+  if (existing.opportunityId) {
+    const next = await prisma.activity.findFirst({
+      where: {
+        opportunityId: existing.opportunityId,
+        nextActionCompleted: false,
+        nextActionDate: { not: null },
+      },
+      orderBy: { nextActionDate: 'asc' },
+      select: { nextActionDate: true, nextActionNote: true },
+    });
+    await prisma.opportunity.update({
+      where: { id: existing.opportunityId },
+      data: {
+        nextActionDate: next?.nextActionDate ?? null,
+        nextActionNote: next?.nextActionNote ?? null,
+      },
+    });
+  }
+
   await writeAudit({
     userId: session.user.id,
     action: 'next_action_completed',

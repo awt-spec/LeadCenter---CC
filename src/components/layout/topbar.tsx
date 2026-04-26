@@ -1,7 +1,9 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { Bell, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
+import type { Notification } from '@prisma/client';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 
 const TITLES: Record<string, string> = {
   '/': 'Home',
@@ -10,6 +12,8 @@ const TITLES: Record<string, string> = {
   '/opportunities': 'Oportunidades',
   '/pipeline': 'Pipeline',
   '/reports': 'Reportes',
+  '/activities': 'Actividad',
+  '/inbox': 'Inbox',
   '/settings': 'Ajustes',
   '/settings/users': 'Usuarios',
 };
@@ -25,7 +29,12 @@ function resolveTitle(pathname: string): string {
   return 'Lead Center';
 }
 
-export function Topbar() {
+type Props = {
+  notifications: Notification[];
+  unreadCount: number;
+};
+
+export function Topbar({ notifications, unreadCount }: Props) {
   const pathname = usePathname();
   const title = resolveTitle(pathname);
 
@@ -42,13 +51,10 @@ export function Topbar() {
             className="h-9 w-64 rounded-lg border border-sysde-border bg-sysde-bg pl-9 pr-3 text-sm text-sysde-gray placeholder:text-sysde-mid focus:outline-none focus:ring-2 focus:ring-sysde-red focus:ring-offset-1"
           />
         </div>
-        <button
-          type="button"
-          aria-label="Notificaciones"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-sysde-mid transition-colors hover:bg-sysde-bg hover:text-sysde-gray"
-        >
-          <Bell className="h-[18px] w-[18px]" />
-        </button>
+        <NotificationBell
+          initialNotifications={notifications}
+          initialUnread={unreadCount}
+        />
       </div>
     </header>
   );

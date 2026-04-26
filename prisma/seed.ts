@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Prisma } from '@prisma/client';
 import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -601,6 +601,195 @@ async function main() {
     console.log(`  ✓ ${OPPS.length} opportunities`);
   } else {
     console.log(`  ↩︎  Skipped (${existingOpps} already exist)`);
+  }
+
+  // Activities
+  console.log('Seeding activities...');
+  const existingActivities = await prisma.activity.count();
+  if (existingActivities === 0) {
+    const allOpps = await prisma.opportunity.findMany({
+      select: { id: true, name: true, accountId: true },
+    });
+    const allCs = await prisma.contact.findMany({ select: { id: true, accountId: true } });
+    const allUsers = await prisma.user.findMany({ select: { id: true, name: true } });
+
+    const dayMs = 24 * 60 * 60 * 1000;
+    const daysAgo = (n: number) => new Date(Date.now() - n * dayMs);
+
+    type Seed = {
+      type: import('@prisma/client').ActivityType;
+      subject: string;
+      body: string;
+      occurredAt: Date;
+      tags?: import('@prisma/client').ActivityTag[];
+      opp?: number;
+      contact?: number;
+      nextDays?: number | null;
+      nextType?: import('@prisma/client').NextActionType;
+      outcome?: import('@prisma/client').ActivityOutcome;
+      template?: string;
+      participantIdx?: number[];
+    };
+
+    const seeds: Seed[] = [
+      { type: 'CALL', subject: 'Llamada inicial de calificación', body: 'Cliente interesado en SAF+ Crédito. Pidió enviar materiales.', occurredAt: daysAgo(58), tags: ['INFO'], opp: 0, nextDays: 3, nextType: 'EMAIL', outcome: 'POSITIVE', template: 'call_quick' },
+      { type: 'MEETING', subject: 'Reunión de indagación · Banca digital', body: 'Reunión con CIO y equipo de TI. Levantamos requerimientos clave.', occurredAt: daysAgo(50), tags: ['INFO', 'WIN_SIGNAL'], opp: 0, nextDays: 7, nextType: 'DEMO', outcome: 'POSITIVE', template: 'discovery_meeting', participantIdx: [0, 1] },
+      { type: 'DEMO', subject: 'Demo ejecutiva SAF+', body: 'Presentación a directorio. Buena recepción de los módulos de cobranza.', occurredAt: daysAgo(40), tags: ['WIN_SIGNAL'], opp: 0, nextDays: 5, nextType: 'SEND_PROPOSAL', outcome: 'POSITIVE', template: 'demo_executive', participantIdx: [0] },
+      { type: 'EMAIL_SENT', subject: 'Envío de materiales técnicos', body: 'Whitepapers y casos de éxito enviados al cliente.', occurredAt: daysAgo(35), tags: ['INFO'], opp: 1, outcome: 'NEUTRAL', template: 'email_sent' },
+      { type: 'CALL', subject: 'Seguimiento — propuesta', body: 'Cliente revisó la propuesta. Tiene preguntas sobre integraciones.', occurredAt: daysAgo(28), tags: ['CONSUL'], opp: 7, nextDays: 2, nextType: 'CALL', outcome: 'POSITIVE', template: 'call_quick' },
+      { type: 'WHATSAPP', subject: 'Coordinación de demo', body: 'Coordinamos sala virtual y agenda con stakeholders.', occurredAt: daysAgo(22), tags: ['INFO'], opp: 5, nextDays: 4, nextType: 'MEETING', outcome: 'POSITIVE', template: 'whatsapp_exchange' },
+      { type: 'INTERNAL_NOTE', subject: 'Consulta interna sobre pricing', body: '@Mafe necesitamos definir si aplicamos descuento por volumen para esta cuenta.', occurredAt: daysAgo(20), tags: ['CONSUL'], opp: 2, template: 'consul_internal' },
+      { type: 'PROPOSAL_SENT', subject: 'Propuesta v1 enviada', body: 'Modelo SaaS, 3 años, descuento por volumen aplicado.', occurredAt: daysAgo(18), tags: ['INFO', 'FOLLOWUP'], opp: 7, nextDays: 7, nextType: 'CALL', outcome: 'POSITIVE', template: 'proposal_sent' },
+      { type: 'EMAIL_RECEIVED', subject: 'Cliente solicita ajustes a propuesta', body: 'Pidieron desglose de servicios profesionales y opción de pago anual.', occurredAt: daysAgo(15), tags: ['SOLIC'], opp: 7, nextDays: 3, nextType: 'SEND_PROPOSAL', outcome: 'NEUTRAL' },
+      { type: 'MEETING', subject: 'Indagación · cooperativa LATAM', body: 'Identificamos pain points en su sistema legacy.', occurredAt: daysAgo(14), tags: ['INFO'], opp: 2, nextDays: 5, nextType: 'DEMO', outcome: 'POSITIVE', template: 'discovery_meeting', participantIdx: [2, 3] },
+      { type: 'CALL', subject: 'Llamada con sponsor', body: 'Sponsor confirma presupuesto para 2026 Q2.', occurredAt: daysAgo(12), tags: ['WIN_SIGNAL'], opp: 9, nextDays: 4, nextType: 'MEETING', outcome: 'POSITIVE' },
+      { type: 'DEMO', subject: 'Demo técnica · módulos PLD', body: 'Mostramos integración con core bancario. Buen feedback técnico.', occurredAt: daysAgo(10), tags: ['INFO'], opp: 5, nextDays: 6, nextType: 'INTERNAL_TASK', outcome: 'POSITIVE', template: 'demo_technical', participantIdx: [4] },
+      { type: 'MATERIAL_SENT', subject: 'Material adicional · cumplimiento normativo', body: 'Enviamos guía de cumplimiento PLD y matriz de controles.', occurredAt: daysAgo(9), tags: ['INFO'], opp: 5, template: 'material_sent' },
+      { type: 'INTERNAL_NOTE', subject: 'Riesgo: cliente está hablando con competencia', body: '@Eduardo aviso porque mencionaron a Temenos en la última llamada.', occurredAt: daysAgo(8), tags: ['BL', 'RISK_SIGNAL'], opp: 9 },
+      { type: 'CALL', subject: 'Llamada de cierre', body: 'Cliente lista para firmar. Coordinamos paso a legal.', occurredAt: daysAgo(7), tags: ['WIN_SIGNAL'], opp: 8, nextDays: 2, nextType: 'INTERNAL_TASK', outcome: 'POSITIVE' },
+      { type: 'EMAIL_SENT', subject: 'Envío de contrato', body: 'Contrato firmado por SYSDE enviado para firma del cliente.', occurredAt: daysAgo(6), tags: ['INFO'], opp: 8, nextDays: 5, nextType: 'WAIT_FOR_CLIENT' },
+      { type: 'WHATSAPP', subject: 'Confirmación de recepción', body: 'Cliente confirmó recepción del contrato.', occurredAt: daysAgo(5), tags: ['INFO'], opp: 8, outcome: 'POSITIVE' },
+      { type: 'EVENT_ATTENDED', subject: 'FinTech Summit Lima', body: 'Encuentro con prospectos en la conferencia.', occurredAt: daysAgo(4), tags: ['INFO'], contact: 1, nextDays: 7, nextType: 'EMAIL' },
+      { type: 'LINKEDIN_MESSAGE', subject: 'Conexión con CTO', body: 'Aceptó conexión y agenda llamada de 30 min.', occurredAt: daysAgo(3), tags: ['INFO'], contact: 0, nextDays: 5, nextType: 'CALL' },
+      { type: 'CALL', subject: 'Discovery · pensiones LATAM', body: 'Levantamos necesidades de recordkeeping y compliance.', occurredAt: daysAgo(3), tags: ['INFO', 'WIN_SIGNAL'], opp: 4, nextDays: 7, nextType: 'DEMO', outcome: 'POSITIVE', template: 'call_quick' },
+      { type: 'INTERNAL_NOTE', subject: 'Seguimiento bloqueado por procurement', body: 'Procurement del cliente exige RFP formal antes de avanzar.', occurredAt: daysAgo(2), tags: ['BL'], opp: 6, outcome: 'BLOCKER' },
+      { type: 'EMAIL_SENT', subject: 'Respuesta a RFP — sección técnica', body: 'Equipo técnico envió respuesta a la sección 4 del RFP.', occurredAt: daysAgo(2), tags: ['INFO'], opp: 6, nextDays: 5, nextType: 'WAIT_FOR_CLIENT' },
+      { type: 'MEETING', subject: 'Workshop con consultor funcional', body: 'Sesión de 2hs para mapear procesos del cliente.', occurredAt: daysAgo(2), tags: ['INFO'], opp: 11, nextDays: 4, nextType: 'INTERNAL_TASK', participantIdx: [2, 3, 4] },
+      { type: 'CALL', subject: 'Check-in semanal con champion', body: 'Champion confirma avance interno y nos da heads-up de timeline.', occurredAt: daysAgo(1), tags: ['INFO', 'WIN_SIGNAL'], opp: 0, nextDays: 5, nextType: 'CALL', outcome: 'POSITIVE' },
+      { type: 'WHATSAPP', subject: 'Pregunta rápida sobre soporte', body: 'Cliente preguntó por SLA. Confirmamos 24x7 para tier 1.', occurredAt: daysAgo(1), tags: ['SOLIC'], opp: 9, outcome: 'POSITIVE' },
+      { type: 'EMAIL_RECEIVED', subject: 'Confirmación de fecha de demo', body: 'Cliente confirmó fecha y asistentes.', occurredAt: daysAgo(0), tags: ['INFO'], opp: 5, outcome: 'POSITIVE' },
+      { type: 'INTERNAL_NOTE', subject: 'Update equipo · pipeline Q2', body: '@Alberto resumen: 3 deals en cierre, 2 con riesgo, 1 stand-by.', occurredAt: daysAgo(0), tags: ['INFO'] },
+      { type: 'CALL', subject: 'Llamada con partner regional', body: 'Coordinamos ejecución conjunta para cuenta clave.', occurredAt: daysAgo(0), tags: ['INFO'], opp: 10, outcome: 'POSITIVE' },
+      { type: 'TASK', subject: 'Preparar pricing especial Q2', body: 'Preparar simulación con descuento progresivo por volumen.', occurredAt: daysAgo(0), tags: ['FOLLOWUP'], opp: 7, nextDays: 2, nextType: 'INTERNAL_TASK' },
+      { type: 'EMAIL_SENT', subject: 'Resumen post-demo + propuesta inicial', body: 'Enviamos resumen de la demo con foco en los puntos que más resonaron.', occurredAt: daysAgo(0), tags: ['INFO'], opp: 5, nextDays: 7, nextType: 'CALL' },
+    ];
+
+    let activitiesCreated = 0;
+    for (const s of seeds) {
+      const oppRef = s.opp !== undefined && s.opp < allOpps.length ? allOpps[s.opp] : null;
+      const contactRef = s.contact !== undefined && s.contact < allCs.length ? allCs[s.contact] : null;
+      const accountId = oppRef?.accountId ?? contactRef?.accountId ?? null;
+
+      const a = await prisma.activity.create({
+        data: {
+          type: s.type,
+          subject: s.subject,
+          bodyText: s.body,
+          tags: s.tags ?? [],
+          occurredAt: s.occurredAt,
+          contactId: contactRef?.id ?? null,
+          accountId,
+          opportunityId: oppRef?.id ?? null,
+          outcome: s.outcome ?? null,
+          templateKey: s.template ?? null,
+          nextActionType: s.nextType ?? null,
+          nextActionDate: s.nextDays !== undefined && s.nextDays !== null
+            ? new Date(Date.now() + s.nextDays * dayMs)
+            : null,
+          nextActionAssigneeId: adminUser.id,
+          nextActionNote: s.nextDays !== undefined ? 'Seguimiento programado' : null,
+          createdById: adminUser.id,
+        },
+      });
+
+      if (s.participantIdx?.length) {
+        for (const idx of s.participantIdx) {
+          if (idx < allCs.length) {
+            await prisma.activityParticipant.create({
+              data: { activityId: a.id, contactId: allCs[idx]!.id },
+            });
+          }
+        }
+      }
+      activitiesCreated++;
+    }
+
+    // System-generated activities (stage_change examples on first 3 opps)
+    for (let i = 0; i < Math.min(3, allOpps.length); i++) {
+      const opp = allOpps[i]!;
+      await prisma.activity.create({
+        data: {
+          type: 'STAGE_CHANGE',
+          subject: 'movió la oportunidad de LEAD a DISCOVERY',
+          opportunityId: opp.id,
+          accountId: opp.accountId,
+          isSystemGenerated: true,
+          systemEventType: 'stage_change',
+          systemMetadata: { from: 'LEAD', to: 'DISCOVERY' } as Prisma.InputJsonValue,
+          occurredAt: daysAgo(35 - i * 5),
+          createdById: adminUser.id,
+        },
+      });
+      activitiesCreated++;
+    }
+
+    // Sync opportunity nextActionDate from latest pending activity
+    for (const opp of allOpps) {
+      const next = await prisma.activity.findFirst({
+        where: {
+          opportunityId: opp.id,
+          nextActionCompleted: false,
+          nextActionDate: { not: null },
+        },
+        orderBy: { nextActionDate: 'asc' },
+        select: { nextActionDate: true, nextActionNote: true },
+      });
+      if (next) {
+        await prisma.opportunity.update({
+          where: { id: opp.id },
+          data: {
+            nextActionDate: next.nextActionDate,
+            nextActionNote: next.nextActionNote,
+          },
+        });
+      }
+    }
+
+    // Insert a couple of mentions for admin
+    if (allUsers.length > 1) {
+      const otherUserId = allUsers.find((u) => u.id !== adminUser.id)?.id;
+      if (otherUserId) {
+        const sample = await prisma.activity.findMany({
+          where: { type: 'INTERNAL_NOTE', createdById: adminUser.id },
+          take: 3,
+          orderBy: { createdAt: 'desc' },
+        });
+        for (const a of sample) {
+          await prisma.activityMention.create({
+            data: { activityId: a.id, mentionedUserId: otherUserId },
+          });
+        }
+      }
+    }
+
+    console.log(`  ✓ ${activitiesCreated} activities`);
+  } else {
+    console.log(`  ↩︎  Skipped (${existingActivities} already exist)`);
+  }
+
+  // Notifications for admin
+  console.log('Seeding notifications...');
+  const existingNotifs = await prisma.notification.count({ where: { userId: adminUser.id } });
+  if (existingNotifs === 0) {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const recent = (n: number) => new Date(Date.now() - n * dayMs);
+    await prisma.notification.createMany({
+      data: [
+        { userId: adminUser.id, type: 'MENTION', title: 'Eduardo te mencionó en una nota', body: 'Riesgo: cliente está hablando con competencia', link: '/activities', isRead: false, createdAt: recent(0) },
+        { userId: adminUser.id, type: 'MENTION', title: 'Mafe te mencionó', body: 'Consulta sobre pricing especial', link: '/activities', isRead: false, createdAt: recent(1) },
+        { userId: adminUser.id, type: 'MENTION', title: 'Sebastiana te mencionó en revisión', body: 'Revisión de propuesta v2', link: '/activities', isRead: false, createdAt: recent(2) },
+        { userId: adminUser.id, type: 'ASSIGNED_NEXT_ACTION', title: 'Te asignaron una próxima acción', body: 'Llamada con champion · vence en 3 días', link: '/inbox', isRead: false, createdAt: recent(0) },
+        { userId: adminUser.id, type: 'ASSIGNED_NEXT_ACTION', title: 'Acción asignada', body: 'Enviar propuesta ajustada', link: '/inbox', isRead: false, createdAt: recent(1) },
+        { userId: adminUser.id, type: 'NEXT_ACTION_DUE', title: 'Acción vencida', body: 'Llamada de cierre con sponsor venció ayer', link: '/inbox', isRead: false, createdAt: recent(0) },
+        { userId: adminUser.id, type: 'NEXT_ACTION_DUE', title: 'Acción vencida', body: 'Enviar propuesta venció hace 2 días', link: '/inbox', isRead: false, createdAt: recent(1) },
+        { userId: adminUser.id, type: 'STAGE_CHANGED', title: 'Cambio de fase: DISCOVERY → DEMO', body: 'CooperAhorro · FileMaster BPM', link: '/pipeline', isRead: true, readAt: recent(2), createdAt: recent(2) },
+        { userId: adminUser.id, type: 'STAGE_CHANGED', title: 'Cambio de fase: DEMO → PROPOSAL', body: 'Banco Horizonte · SAF+ Full', link: '/pipeline', isRead: true, readAt: recent(3), createdAt: recent(3) },
+        { userId: adminUser.id, type: 'STAGE_CHANGED', title: 'Cambio de fase: PROPOSAL → NEGOTIATION', body: 'Seguros Tropical · FileMaster Full', link: '/pipeline', isRead: false, createdAt: recent(1) },
+      ],
+    });
+    console.log('  ✓ 10 notifications');
+  } else {
+    console.log(`  ↩︎  Skipped (${existingNotifs} already exist)`);
   }
 
   console.log('✅ Seed completed successfully.');

@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { can } from '@/lib/rbac';
 import { computeStatusAndProbability } from '@/lib/opportunities/status-helpers';
+import { createNotification } from '@/lib/notifications/create-notification';
 
 export type KanbanStageChangeInput = {
   opportunityId: string;
@@ -94,6 +95,25 @@ export async function changeOpportunityStage(
         },
       });
 
+      // System-generated activity for the timeline
+      await tx.activity.create({
+        data: {
+          type: 'STAGE_CHANGE',
+          subject: `movió la oportunidad de ${fromStage} a ${input.toStage}`,
+          bodyText: input.notes ?? input.standbyReason ?? null,
+          opportunityId: opp.id,
+          accountId: opp.accountId,
+          isSystemGenerated: true,
+          systemEventType: 'stage_change',
+          systemMetadata: {
+            from: fromStage,
+            to: input.toStage,
+            daysInPreviousStage,
+          } as Prisma.InputJsonValue,
+          createdById: session.user.id,
+        },
+      });
+
       await tx.auditLog.create({
         data: {
           userId: session.user.id,
@@ -129,6 +149,17 @@ export async function changeOpportunityStage(
   } catch (err) {
     console.error('Stage change failed:', err);
     return { ok: false, error: 'Error al cambiar la fase. Intenta de nuevo.' };
+  }
+
+  // Notify the owner if the change wasn't done by them
+  if (opp.ownerId && opp.ownerId !== session.user.id) {
+    await createNotification({
+      userId: opp.ownerId,
+      type: 'STAGE_CHANGED',
+      title: `Cambio de fase: ${fromStage} → ${input.toStage}`,
+      body: opp.name,
+      link: `/opportunities/${opp.id}`,
+    });
   }
 
   revalidatePath('/pipeline');

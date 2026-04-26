@@ -5,6 +5,11 @@ import { es } from 'date-fns/locale';
 import { ChevronLeft, Pencil, Plus, Globe, MapPin, Briefcase, Users } from 'lucide-react';
 import { auth } from '@/lib/auth';
 import { can } from '@/lib/rbac';
+import { prisma } from '@/lib/db';
+import { listActivities } from '@/lib/activities/queries';
+import { activityFilterSchema } from '@/lib/activities/schemas';
+import { listUsers } from '@/lib/contacts/queries';
+import { TimelineWithComposer } from '@/components/activities/timeline-with-composer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +46,19 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   const closed = account.opportunities.filter((o) => o.status === 'WON' || o.status === 'LOST');
   const won = closed.filter((o) => o.status === 'WON').length;
   const winRate = closed.length > 0 ? Math.round((won / closed.length) * 100) : 0;
+
+  const activityFilters = activityFilterSchema.parse({});
+  const [{ rows: activities }, allContactsLite, allAccountsLite, allOppsLite, usersLite] =
+    await Promise.all([
+      listActivities(session, { accountId: id }, activityFilters),
+      prisma.contact.findMany({ select: { id: true, fullName: true }, orderBy: { fullName: 'asc' }, take: 200 }),
+      prisma.account.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 200 }),
+      prisma.opportunity.findMany({ select: { id: true, name: true, code: true }, orderBy: { createdAt: 'desc' }, take: 200 }),
+      listUsers(),
+    ]);
+  const composerContacts = allContactsLite.map((c) => ({ id: c.id, label: c.fullName }));
+  const composerAccounts = allAccountsLite.map((a) => ({ id: a.id, label: a.name }));
+  const composerOpps = allOppsLite.map((o) => ({ id: o.id, label: `${o.code ?? o.id} · ${o.name}` }));
 
   return (
     <div>
@@ -149,6 +167,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
       <Tabs defaultValue="overview" className="mt-6">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="activity">Actividad</TabsTrigger>
           <TabsTrigger value="contacts">Contactos</TabsTrigger>
           <TabsTrigger value="opps">Oportunidades</TabsTrigger>
           {(account.parentAccount || account.childAccounts.length > 0) && (
@@ -192,6 +211,19 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="activity">
+          <TimelineWithComposer
+            activities={activities}
+            currentUserId={session.user.id}
+            composerDefaults={{ accountId: account.id }}
+            contacts={composerContacts}
+            accounts={composerAccounts}
+            opportunities={composerOpps}
+            users={usersLite.map((u) => ({ id: u.id, name: u.name }))}
+            canCreate={can(session, 'activities:create')}
+          />
         </TabsContent>
 
         <TabsContent value="contacts">

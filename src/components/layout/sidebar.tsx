@@ -10,6 +10,8 @@ import {
   Kanban,
   BarChart3,
   Settings,
+  Activity as ActivityIcon,
+  Inbox,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -24,10 +26,12 @@ type NavItem = {
 
 const PRIMARY_NAV: NavItem[] = [
   { label: 'Home', href: '/', icon: LayoutDashboard },
+  { label: 'Inbox', href: '/inbox', icon: Inbox },
   { label: 'Contactos', href: '/contacts', icon: Users },
   { label: 'Cuentas', href: '/accounts', icon: Building2 },
   { label: 'Oportunidades', href: '/opportunities', icon: Briefcase },
   { label: 'Pipeline', href: '/pipeline', icon: Kanban },
+  { label: 'Actividad', href: '/activities', icon: ActivityIcon },
   { label: 'Reportes', href: '/reports', icon: BarChart3 },
 ];
 

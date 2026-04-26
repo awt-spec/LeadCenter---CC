@@ -3,6 +3,10 @@ import { auth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
 import { AuthSessionProvider } from '@/components/providers/session-provider';
+import {
+  listNotifications,
+  countUnreadNotifications,
+} from '@/lib/notifications/queries';
 
 export default async function DashboardLayout({
   children,
@@ -19,12 +23,17 @@ export default async function DashboardLayout({
     roles: session.user.roles ?? [],
   };
 
+  const [notifications, unreadCount] = await Promise.all([
+    listNotifications(session, 10),
+    countUnreadNotifications(session),
+  ]);
+
   return (
     <AuthSessionProvider>
       <div className="min-h-screen bg-sysde-bg">
         <Sidebar user={user} permissions={session.user.permissions ?? []} />
         <div className="pl-[240px]">
-          <Topbar />
+          <Topbar notifications={notifications} unreadCount={unreadCount} />
           <main className="min-h-[calc(100vh-56px)] p-8">{children}</main>
         </div>
       </div>

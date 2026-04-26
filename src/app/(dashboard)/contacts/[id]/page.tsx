@@ -19,10 +19,15 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { auth } from '@/lib/auth';
 import { can } from '@/lib/rbac';
+import { prisma } from '@/lib/db';
 import {
   getContactById,
   getContactAuditLog,
+  listUsers,
 } from '@/lib/contacts/queries';
+import { listActivities } from '@/lib/activities/queries';
+import { activityFilterSchema } from '@/lib/activities/schemas';
+import { TimelineWithComposer } from '@/components/activities/timeline-with-composer';
 import {
   CONTACT_STATUS_LABELS,
   CONTACT_STATUS_VARIANTS,
@@ -51,6 +56,19 @@ export default async function ContactDetailPage({
   const canSeeAudit = can(session, 'audit:read');
 
   const auditLog = canSeeAudit ? await getContactAuditLog(id) : [];
+
+  const activityFilters = activityFilterSchema.parse({});
+  const [{ rows: activities }, allContactsLite, allAccountsLite, allOppsLite, usersLite] =
+    await Promise.all([
+      listActivities(session, { contactId: id }, activityFilters),
+      prisma.contact.findMany({ select: { id: true, fullName: true }, orderBy: { fullName: 'asc' }, take: 200 }),
+      prisma.account.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 200 }),
+      prisma.opportunity.findMany({ select: { id: true, name: true, code: true }, orderBy: { createdAt: 'desc' }, take: 200 }),
+      listUsers(),
+    ]);
+  const composerContacts = allContactsLite.map((c) => ({ id: c.id, label: c.fullName }));
+  const composerAccounts = allAccountsLite.map((a) => ({ id: a.id, label: a.name }));
+  const composerOpps = allOppsLite.map((o) => ({ id: o.id, label: `${o.code ?? o.id} · ${o.name}` }));
 
   const engagement = Math.min(100, Math.max(0, contact.engagementScore));
 
@@ -186,16 +204,19 @@ export default async function ContactDetailPage({
             </TabsContent>
 
             <TabsContent value="activity">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Timeline de actividad</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-sysde-border bg-sysde-bg text-sm text-sysde-mid">
-                    Las actividades (llamadas, emails, reuniones) se implementarán en la Fase 2.
-                  </div>
-                </CardContent>
-              </Card>
+              <TimelineWithComposer
+                activities={activities}
+                currentUserId={session.user.id}
+                composerDefaults={{
+                  contactId: contact.id,
+                  accountId: contact.accountId ?? undefined,
+                }}
+                contacts={composerContacts}
+                accounts={composerAccounts}
+                opportunities={composerOpps}
+                users={usersLite.map((u) => ({ id: u.id, name: u.name }))}
+                canCreate={can(session, 'activities:create')}
+              />
             </TabsContent>
 
             <TabsContent value="opportunities">
