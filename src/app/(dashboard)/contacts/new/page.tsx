@@ -3,6 +3,7 @@ import { ChevronLeft } from 'lucide-react';
 import { auth } from '@/lib/auth';
 import { can } from '@/lib/rbac';
 import { listTags, listUsers } from '@/lib/contacts/queries';
+import { prisma } from '@/lib/db';
 import { Forbidden } from '@/components/shared/forbidden';
 import { ContactForm } from '../components/contact-form';
 
@@ -16,7 +17,11 @@ export default async function NewContactPage() {
     return <Forbidden message="No tienes permiso para crear contactos." />;
   }
 
-  const [users, tags] = await Promise.all([listUsers(), listTags()]);
+  const [users, tags, accounts] = await Promise.all([
+    listUsers(),
+    listTags(),
+    prisma.account.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 500 }),
+  ]);
 
   return (
     <div>
@@ -36,6 +41,7 @@ export default async function NewContactPage() {
         mode="create"
         users={users.map((u) => ({ id: u.id, name: u.name }))}
         tags={tags}
+        accounts={accounts}
         defaults={{ ownerId: session.user.id }}
       />
     </div>

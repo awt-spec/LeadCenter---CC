@@ -4,6 +4,7 @@ import { ChevronLeft } from 'lucide-react';
 import { auth } from '@/lib/auth';
 import { can } from '@/lib/rbac';
 import { getContactById, listTags, listUsers } from '@/lib/contacts/queries';
+import { prisma } from '@/lib/db';
 import { Forbidden } from '@/components/shared/forbidden';
 import { ContactForm } from '../../components/contact-form';
 
@@ -28,7 +29,11 @@ export default async function EditContactPage({
     return <Forbidden message="No tienes permiso para editar este contacto." />;
   }
 
-  const [users, tags] = await Promise.all([listUsers(), listTags()]);
+  const [users, tags, accounts] = await Promise.all([
+    listUsers(),
+    listTags(),
+    prisma.account.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 500 }),
+  ]);
 
   return (
     <div>
@@ -50,6 +55,7 @@ export default async function EditContactPage({
         contactId={id}
         users={users.map((u) => ({ id: u.id, name: u.name }))}
         tags={tags}
+        accounts={accounts}
         canDelete={can(session, 'contacts:delete')}
         defaults={{
           email: contact.email,
@@ -59,6 +65,7 @@ export default async function EditContactPage({
           department: contact.department ?? '',
           seniorityLevel: contact.seniorityLevel,
           companyName: contact.companyName ?? '',
+          accountId: contact.accountId,
           country: contact.country ?? '',
           city: contact.city ?? '',
           timezone: contact.timezone ?? '',

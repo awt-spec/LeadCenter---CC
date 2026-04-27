@@ -20,6 +20,8 @@ import { ClickableRow } from './clickable-row';
 import { DeleteResourceButton } from '@/components/shared/delete-resource-button';
 import { getAccountById } from '@/lib/accounts/queries';
 import { deleteAccount } from '@/lib/accounts/mutations';
+import { listTasksByAccount, getTaskStats } from '@/lib/tasks/queries';
+import { TaskKanban } from './tasks/task-kanban';
 import {
   ACCOUNT_STATUS_LABELS,
   ACCOUNT_STATUS_VARIANTS,
@@ -51,14 +53,21 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   const winRate = closed.length > 0 ? Math.round((won / closed.length) * 100) : 0;
 
   const activityFilters = activityFilterSchema.parse({});
-  const [{ rows: activities }, allContactsLite, allAccountsLite, allOppsLite, usersLite] =
-    await Promise.all([
-      listActivities(session, { accountId: id }, activityFilters),
-      prisma.contact.findMany({ select: { id: true, fullName: true }, orderBy: { fullName: 'asc' }, take: 200 }),
-      prisma.account.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 200 }),
-      prisma.opportunity.findMany({ select: { id: true, name: true, code: true }, orderBy: { createdAt: 'desc' }, take: 200 }),
-      listUsers(),
-    ]);
+  const [
+    { rows: activities },
+    allContactsLite,
+    allAccountsLite,
+    allOppsLite,
+    usersLite,
+    tasks,
+  ] = await Promise.all([
+    listActivities(session, { accountId: id }, activityFilters),
+    prisma.contact.findMany({ select: { id: true, fullName: true }, orderBy: { fullName: 'asc' }, take: 200 }),
+    prisma.account.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 200 }),
+    prisma.opportunity.findMany({ select: { id: true, name: true, code: true }, orderBy: { createdAt: 'desc' }, take: 200 }),
+    listUsers(),
+    listTasksByAccount(id),
+  ]);
   const composerContacts = allContactsLite.map((c) => ({ id: c.id, label: c.fullName }));
   const composerAccounts = allAccountsLite.map((a) => ({ id: a.id, label: a.name }));
   const composerOpps = allOppsLite.map((o) => ({ id: o.id, label: `${o.code ?? o.id} · ${o.name}` }));
@@ -179,6 +188,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
       <Tabs defaultValue="overview" className="mt-6">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="tasks">Tareas {tasks.length > 0 && `(${tasks.length})`}</TabsTrigger>
           <TabsTrigger value="activity">Actividad</TabsTrigger>
           <TabsTrigger value="contacts">Contactos</TabsTrigger>
           <TabsTrigger value="opps">Oportunidades</TabsTrigger>
@@ -223,6 +233,15 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="tasks">
+          <TaskKanban
+            accountId={account.id}
+            initialTasks={tasks}
+            users={usersLite.map((u) => ({ id: u.id, name: u.name, email: u.email, avatarUrl: u.avatarUrl }))}
+            canEdit={canEdit}
+          />
         </TabsContent>
 
         <TabsContent value="activity">

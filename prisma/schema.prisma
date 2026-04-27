@@ -40,6 +40,10 @@ model User {
   notifications          Notification[]
   ownedCampaigns         Campaign[]      @relation("CampaignOwner")
   createdCampaigns       Campaign[]      @relation("CampaignCreator")
+  createdTasks           Task[]          @relation("TaskCreator")
+  taskAssignees          TaskAssignee[]  @relation("TaskAssignees")
+  taskComments           TaskComment[]   @relation("TaskCommenter")
+  taskAttachments        TaskAttachment[] @relation("TaskUploader")
 
   @@index([email])
 }
@@ -165,6 +169,7 @@ model Account {
   contacts         Contact[]
   opportunities    Opportunity[]
   activities       Activity[]
+  tasks            Task[]
 
   @@index([name])
   @@index([domain])
@@ -259,6 +264,7 @@ model Contact {
   activities       Activity[]
   participantIn    ActivityParticipant[]
   campaigns        CampaignContact[]
+  tasks            Task[]
 
   @@index([email])
   @@index([ownerId])
@@ -267,6 +273,11 @@ model Contact {
   @@index([accountId])
   @@index([createdAt])
   @@index([fullName])
+  @@index([companyName])
+  @@index([status, ownerId])
+  @@index([accountId, status])
+  @@index([marketSegment])
+  @@index([source])
 }
 
 enum SeniorityLevel {
@@ -454,6 +465,7 @@ model Opportunity {
   contactRoles        OpportunityContact[]
   stageHistory        StageHistory[]
   activities          Activity[]
+  tasks               Task[]
 
   campaignId          String?
   campaign            Campaign?         @relation("CampaignOpportunities", fields: [campaignId], references: [id], onDelete: SetNull)
@@ -915,4 +927,113 @@ enum CampaignContactStatus {
   BOUNCED
   REPLIED
   CONVERTED
+}
+
+// ==================== TASKS (Asana-style task board per account) ====================
+
+model Task {
+  id           String         @id @default(cuid())
+
+  title        String
+  description  String?        @db.Text
+  status       TaskStatus     @default(TODO)
+  priority     TaskPriority   @default(NORMAL)
+
+  dueDate      DateTime?
+  startDate    DateTime?
+  completedAt  DateTime?
+
+  position     Int            @default(0)
+
+  accountId    String?
+  account      Account?       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  opportunityId String?
+  opportunity   Opportunity?  @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  contactId    String?
+  contact      Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  parentTaskId String?
+  parentTask   Task?          @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks     Task[]         @relation("TaskSubtasks")
+
+  createdById  String
+  createdBy    User           @relation("TaskCreator", fields: [createdById], references: [id])
+
+  assignees    TaskAssignee[]
+  comments     TaskComment[]
+  attachments  TaskAttachment[]
+
+  tags         String[]       @default([])
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([accountId, status])
+  @@index([accountId, priority])
+  @@index([opportunityId])
+  @@index([createdById])
+  @@index([dueDate])
+  @@index([status, dueDate])
+  @@index([parentTaskId])
+}
+
+enum TaskStatus {
+  BACKLOG
+  TODO
+  IN_PROGRESS
+  REVIEW
+  BLOCKED
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model TaskAssignee {
+  taskId     String
+  userId     String
+  assignedAt DateTime @default(now())
+
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user       User     @relation("TaskAssignees", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId])
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+  editedAt  DateTime?
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation("TaskCommenter", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+}
+
+model TaskAttachment {
+  id         String   @id @default(cuid())
+  taskId     String
+  fileName   String
+  fileUrl    String
+  fileSize   Int      @default(0)
+  mimeType   String   @default("application/octet-stream")
+  uploadedById String
+  uploadedAt DateTime @default(now())
+
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploadedBy User     @relation("TaskUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
 }

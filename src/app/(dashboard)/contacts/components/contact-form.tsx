@@ -32,6 +32,7 @@ import {
 
 type UserLite = { id: string; name: string };
 type TagLite = { id: string; name: string; color: string };
+type AccountLite = { id: string; name: string };
 
 type Props = {
   mode: 'create' | 'edit';
@@ -39,12 +40,13 @@ type Props = {
   defaults?: Partial<ContactFormValues>;
   users: UserLite[];
   tags: TagLite[];
+  accounts?: AccountLite[];
   canDelete?: boolean;
 };
 
 const NONE_VALUE = '__none__';
 
-export function ContactForm({ mode, contactId, defaults, users, tags, canDelete }: Props) {
+export function ContactForm({ mode, contactId, defaults, users, tags, accounts, canDelete }: Props) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -65,6 +67,7 @@ export function ContactForm({ mode, contactId, defaults, users, tags, canDelete 
       department: defaults?.department ?? '',
       seniorityLevel: defaults?.seniorityLevel ?? 'UNKNOWN',
       companyName: defaults?.companyName ?? '',
+      accountId: defaults?.accountId ?? null,
       country: defaults?.country ?? '',
       city: defaults?.city ?? '',
       phone: defaults?.phone ?? '',
@@ -86,6 +89,7 @@ export function ContactForm({ mode, contactId, defaults, users, tags, canDelete 
 
   const tagIds = watch('tagIds');
   const ownerId = watch('ownerId');
+  const accountId = watch('accountId');
   const source = watch('source');
   const status = watch('status');
   const seniority = watch('seniorityLevel');
@@ -168,9 +172,31 @@ export function ContactForm({ mode, contactId, defaults, users, tags, canDelete 
           <Field label="Departamento">
             <Input {...register('department')} />
           </Field>
-          <Field label="Empresa">
+          <Field label="Empresa (texto libre)">
             <Input {...register('companyName')} />
           </Field>
+          {accounts && accounts.length > 0 && (
+            <Field label="Cuenta vinculada">
+              <Select
+                value={accountId ?? NONE_VALUE}
+                onValueChange={(v) =>
+                  setValue('accountId', v === NONE_VALUE ? null : v)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sin cuenta vinculada" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_VALUE}>Sin vincular</SelectItem>
+                  {accounts.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
           <Field label="Sitio web" error={errors.website?.message}>
             <Input type="url" {...register('website')} />
           </Field>

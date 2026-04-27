@@ -16,7 +16,7 @@ import { ContactsTable, type ContactRow } from './components/contacts-table';
 import { ExportButton } from './components/export-button';
 import { Forbidden } from '@/components/shared/forbidden';
 
-export const metadata = { title: 'Contactos' };
+export const metadata = { title: 'Base de datos' };
 
 function parseArrayParam(v: string | string[] | undefined): string[] | undefined {
   if (!v) return undefined;
@@ -103,9 +103,9 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h2 className="text-[24px] font-semibold text-sysde-gray">Contactos</h2>
+          <h2 className="text-[24px] font-semibold text-sysde-gray">Base de datos</h2>
           <p className="mt-1 text-sm text-sysde-mid">
-            {total.toLocaleString('es-MX')} contactos en total
+            {total.toLocaleString('es-CR')} contactos · indexado para 100k+ registros
           </p>
         </div>
         <div className="flex items-center gap-2">
