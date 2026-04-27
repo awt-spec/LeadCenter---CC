@@ -37,6 +37,8 @@ model User {
   nextActionAssignments  Activity[]          @relation("NextActionAssignee")
   mentions               ActivityMention[]   @relation("ActivityMentions")
   notifications          Notification[]
+  ownedCampaigns         Campaign[]      @relation("CampaignOwner")
+  createdCampaigns       Campaign[]      @relation("CampaignCreator")
 
   @@index([email])
 }
@@ -255,6 +257,7 @@ model Contact {
   opportunityRoles OpportunityContact[]
   activities       Activity[]
   participantIn    ActivityParticipant[]
+  campaigns        CampaignContact[]
 
   @@index([email])
   @@index([ownerId])
@@ -451,10 +454,14 @@ model Opportunity {
   stageHistory        StageHistory[]
   activities          Activity[]
 
+  campaignId          String?
+  campaign            Campaign?         @relation("CampaignOpportunities", fields: [campaignId], references: [id], onDelete: SetNull)
+
   @@index([accountId])
   @@index([ownerId])
   @@index([stage])
   @@index([status])
+  @@index([campaignId])
   @@index([product])
   @@index([expectedCloseDate])
   @@index([createdAt])
@@ -759,4 +766,139 @@ enum NotificationType {
   STAGE_CHANGED
   CONTACT_ASSIGNED
   SYSTEM
+}
+
+// ==================== CAMPAIGNS ====================
+
+model Campaign {
+  id             String          @id @default(cuid())
+
+  name           String
+  code           String?         @unique
+  description    String?         @db.Text
+  type           CampaignType    @default(MIXED)
+  status         CampaignStatus  @default(DRAFT)
+
+  goal           CampaignGoal    @default(LEAD_GEN)
+  targetSegment  MarketSegment?
+  targetProduct  ProductInterest[] @default([])
+  targetCountry  String?
+
+  startDate      DateTime?
+  endDate        DateTime?
+
+  budget         Decimal?        @db.Decimal(18, 2)
+  spent          Decimal?        @db.Decimal(18, 2)
+  currency       String          @default("USD")
+
+  ownerId        String?
+  owner          User?           @relation("CampaignOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  createdById    String?
+  createdBy      User?           @relation("CampaignCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  contacts       CampaignContact[]
+  steps          CampaignStep[]
+  opportunities  Opportunity[]   @relation("CampaignOpportunities")
+
+  @@index([status])
+  @@index([type])
+  @@index([ownerId])
+  @@index([startDate])
+}
+
+enum CampaignType {
+  EMAIL_DRIP
+  COLD_OUTBOUND
+  WEBINAR
+  EVENT
+  REFERRAL
+  CONTENT
+  PARTNER
+  PAID_ADS
+  MIXED
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum CampaignGoal {
+  AWARENESS
+  LEAD_GEN
+  CONVERSION
+  RETENTION
+  REFERRAL
+  EVENT_REGISTRATION
+}
+
+model CampaignStep {
+  id          String           @id @default(cuid())
+  campaignId  String
+  campaign    Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  order       Int
+  type        CampaignStepType
+  name        String
+  delayDays   Int              @default(0)
+
+  emailSubject String?
+  emailBody    String?         @db.Text
+  callScript   String?         @db.Text
+  taskTitle    String?
+  notes        String?         @db.Text
+
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([campaignId, order])
+}
+
+enum CampaignStepType {
+  EMAIL
+  WAIT
+  CALL
+  TASK
+  LINKEDIN
+  WHATSAPP
+  EVENT_INVITE
+  BRANCH
+}
+
+model CampaignContact {
+  campaignId    String
+  contactId     String
+
+  campaign      Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact       Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  status        CampaignContactStatus @default(ACTIVE)
+  enrolledAt    DateTime        @default(now())
+  completedAt   DateTime?
+  unsubscribedAt DateTime?
+  bouncedAt     DateTime?
+
+  currentStepId String?
+  notes         String?
+
+  @@id([campaignId, contactId])
+  @@index([contactId])
+  @@index([status])
+}
+
+enum CampaignContactStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  UNSUBSCRIBED
+  BOUNCED
+  REPLIED
+  CONVERTED
 }
