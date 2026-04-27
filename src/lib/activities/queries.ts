@@ -22,6 +22,11 @@ export type ActivityWithRelations = Prisma.ActivityGetPayload<{
     };
     attachments: true;
     nextActionAssignee: { select: { id: true; name: true; avatarUrl: true } };
+    assignees: {
+      include: {
+        user: { select: { id: true; name: true; email: true; avatarUrl: true } };
+      };
+    };
   };
 }>;
 
@@ -42,6 +47,11 @@ const INCLUDE = {
   },
   attachments: true,
   nextActionAssignee: { select: { id: true, name: true, avatarUrl: true } },
+  assignees: {
+    include: {
+      user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+    },
+  },
 } satisfies Prisma.ActivityInclude;
 
 export type ActivityScope = {

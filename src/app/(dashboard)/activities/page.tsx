@@ -87,6 +87,7 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: S
       <ActivityTimeline
         activities={activities}
         currentUserId={session.user.id}
+        allUsers={users.map((u) => ({ id: u.id, name: u.name, email: u.email, avatarUrl: u.avatarUrl }))}
       />
     </div>
   );

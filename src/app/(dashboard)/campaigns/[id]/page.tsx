@@ -27,6 +27,8 @@ import {
 } from '../components/campaign-charts';
 import { FlowEditor } from '../components/flow-editor';
 import { EnrollContactsDialog } from '../components/enroll-contacts-dialog';
+import { DeleteResourceButton } from '@/components/shared/delete-resource-button';
+import { deleteCampaign } from '@/lib/campaigns/mutations';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -151,12 +153,21 @@ export default async function CampaignDetailPage({
           </p>
         </div>
         {canEdit && (
-          <Button asChild variant="outline">
-            <Link href={`/campaigns/${campaign.id}/edit`}>
-              <Pencil className="mr-2 h-4 w-4" />
-              Editar
-            </Link>
-          </Button>
+          <div className="flex gap-2">
+            <Button asChild variant="outline">
+              <Link href={`/campaigns/${campaign.id}/edit`}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Editar
+              </Link>
+            </Button>
+            <DeleteResourceButton
+              id={campaign.id}
+              resourceLabel="Campaña"
+              resourceName={campaign.name}
+              action={deleteCampaign}
+              redirectTo="/campaigns"
+            />
+          </div>
         )}
       </div>
 

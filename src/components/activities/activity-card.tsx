@@ -25,6 +25,7 @@ import {
 } from '@/lib/activities/labels';
 import { getTemplate } from '@/lib/activities/templates';
 import { ActivityTagBadge } from './activity-tag-badge';
+import { AssigneePicker } from './assignee-picker';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -49,9 +50,10 @@ type Props = {
   activity: ActivityWithRelations;
   currentUserId: string;
   hideRelations?: boolean;
+  allUsers?: { id: string; name: string; email?: string; avatarUrl?: string | null }[];
 };
 
-export function ActivityCard({ activity, currentUserId, hideRelations }: Props) {
+export function ActivityCard({ activity, currentUserId, hideRelations, allUsers }: Props) {
   const router = useRouter();
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -322,7 +324,26 @@ export function ActivityCard({ activity, currentUserId, hideRelations }: Props) 
             </Avatar>
             <span>{activity.createdBy.name}</span>
           </div>
-          <span>{format(activity.createdAt, 'd LLL', { locale: es })}</span>
+          <div className="flex items-center gap-2">
+            {allUsers && (
+              <>
+                <span className="text-[10px] uppercase tracking-wide">Resp.</span>
+                <AssigneePicker
+                  activityId={activity.id}
+                  initial={activity.assignees.map((a) => ({
+                    id: a.user.id,
+                    name: a.user.name,
+                    email: a.user.email,
+                    avatarUrl: a.user.avatarUrl,
+                  }))}
+                  allUsers={allUsers}
+                  size="xs"
+                />
+              </>
+            )}
+            <span>·</span>
+            <span>{format(activity.createdAt, 'd LLL', { locale: es })}</span>
+          </div>
         </div>
       </div>
 

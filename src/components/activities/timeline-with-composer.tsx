@@ -58,6 +58,7 @@ export function TimelineWithComposer({
         activities={activities}
         currentUserId={currentUserId}
         hideRelations={hideRelations}
+        allUsers={users}
       />
 
       <ActivityComposer

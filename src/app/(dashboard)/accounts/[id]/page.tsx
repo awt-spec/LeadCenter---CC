@@ -17,7 +17,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ClickableRow } from './clickable-row';
+import { DeleteResourceButton } from '@/components/shared/delete-resource-button';
 import { getAccountById } from '@/lib/accounts/queries';
+import { deleteAccount } from '@/lib/accounts/mutations';
 import {
   ACCOUNT_STATUS_LABELS,
   ACCOUNT_STATUS_VARIANTS,
@@ -123,12 +125,21 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
               </Button>
             )}
             {canEdit && (
-              <Button asChild>
-                <Link href={`/accounts/${account.id}/edit`}>
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Editar
-                </Link>
-              </Button>
+              <>
+                <Button asChild>
+                  <Link href={`/accounts/${account.id}/edit`}>
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Editar
+                  </Link>
+                </Button>
+                <DeleteResourceButton
+                  id={account.id}
+                  resourceLabel="Cuenta"
+                  resourceName={account.name}
+                  action={deleteAccount}
+                  redirectTo="/accounts"
+                />
+              </>
             )}
           </div>
         </CardContent>

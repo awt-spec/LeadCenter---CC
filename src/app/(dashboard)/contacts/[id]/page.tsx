@@ -28,6 +28,8 @@ import {
 import { listActivities } from '@/lib/activities/queries';
 import { activityFilterSchema } from '@/lib/activities/schemas';
 import { TimelineWithComposer } from '@/components/activities/timeline-with-composer';
+import { DeleteResourceButton } from '@/components/shared/delete-resource-button';
+import { deleteContact } from '@/lib/contacts/mutations';
 import {
   CONTACT_STATUS_LABELS,
   CONTACT_STATUS_VARIANTS,
@@ -115,6 +117,13 @@ export default async function ContactDetailPage({
                   Editar
                 </Link>
               </Button>
+              <DeleteResourceButton
+                id={contact.id}
+                resourceLabel="Contacto"
+                resourceName={contact.fullName}
+                action={deleteContact}
+                redirectTo="/contacts"
+              />
             </div>
           )}
         </CardContent>

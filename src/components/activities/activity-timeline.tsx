@@ -11,6 +11,7 @@ type Props = {
   currentUserId: string;
   hideRelations?: boolean;
   groupByDate?: boolean;
+  allUsers?: { id: string; name: string; email?: string; avatarUrl?: string | null }[];
 };
 
 export function ActivityTimeline({
@@ -18,6 +19,7 @@ export function ActivityTimeline({
   currentUserId,
   hideRelations,
   groupByDate = true,
+  allUsers,
 }: Props) {
   if (activities.length === 0) {
     return (
@@ -44,6 +46,7 @@ export function ActivityTimeline({
               activity={a}
               currentUserId={currentUserId}
               hideRelations={hideRelations}
+              allUsers={allUsers}
             />
           )
         )}
