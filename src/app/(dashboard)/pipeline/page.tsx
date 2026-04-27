@@ -4,7 +4,7 @@ import { Forbidden } from '@/components/shared/forbidden';
 import { listCountries, listUsers } from '@/lib/contacts/queries';
 import { loadPipeline } from '@/lib/pipeline/queries';
 import { computePipelineStats } from '@/lib/pipeline/forecast';
-import { parsePipelineFilters } from '@/lib/pipeline/use-pipeline-filters';
+import { parsePipelineFilters } from '@/lib/pipeline/parse-filters';
 import { PipelineHeader } from './components/pipeline-header';
 import { PipelineStatsBar } from './components/pipeline-stats';
 import { PipelineFilters } from './components/pipeline-filters';
