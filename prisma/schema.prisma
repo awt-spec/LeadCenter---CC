@@ -36,6 +36,7 @@ model User {
   createdActivities      Activity[]          @relation("ActivityCreator")
   nextActionAssignments  Activity[]          @relation("NextActionAssignee")
   mentions               ActivityMention[]   @relation("ActivityMentions")
+  activityAssignees      ActivityAssignee[]
   notifications          Notification[]
   ownedCampaigns         Campaign[]      @relation("CampaignOwner")
   createdCampaigns       Campaign[]      @relation("CampaignCreator")
@@ -617,6 +618,7 @@ model Activity {
 
   participants          ActivityParticipant[]
   mentions              ActivityMention[]
+  assignees             ActivityAssignee[]
 
   nextActionType        NextActionType?
   nextActionNote        String?
@@ -722,6 +724,18 @@ model ActivityMention {
 
   @@id([activityId, mentionedUserId])
   @@index([mentionedUserId, readAt])
+}
+
+model ActivityAssignee {
+  activityId String
+  userId     String
+  assignedAt DateTime @default(now())
+
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([activityId, userId])
+  @@index([userId])
 }
 
 model ActivityAttachment {

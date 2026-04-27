@@ -26,6 +26,7 @@ import {
   FunnelChart,
 } from '../components/campaign-charts';
 import { FlowEditor } from '../components/flow-editor';
+import { EnrollContactsDialog } from '../components/enroll-contacts-dialog';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -250,7 +251,15 @@ export default async function CampaignDetailPage({
           <FlowEditor campaignId={campaign.id} steps={campaign.steps} canEdit={canEdit} />
         </TabsContent>
 
-        <TabsContent value="contacts">
+        <TabsContent value="contacts" className="space-y-4">
+          {canEdit && (
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-sysde-mid">
+                Selecciona contactos existentes del CRM para enrolar a esta campaña.
+              </p>
+              <EnrollContactsDialog campaignId={campaign.id} />
+            </div>
+          )}
           <Card className="p-0">
             {campaign.contacts.length === 0 ? (
               <div className="p-10 text-center text-sm text-sysde-mid">

@@ -191,6 +191,31 @@ export async function deleteCampaignStep(campaignId: string, stepId: string): Pr
   return { ok: true, data: undefined };
 }
 
+export async function enrollContactsBulk(
+  campaignId: string,
+  contactIds: string[]
+): Promise<Result<{ enrolled: number }>> {
+  const session = await requireSession();
+  if (!isAdmin(session)) return { ok: false, error: 'Sin permiso.' };
+  if (!contactIds.length) return { ok: true, data: { enrolled: 0 } };
+
+  const result = await prisma.campaignContact.createMany({
+    data: contactIds.map((contactId) => ({
+      campaignId,
+      contactId,
+      status: 'ACTIVE' as const,
+    })),
+    skipDuplicates: true,
+  });
+
+  await audit(session.user.id, 'enroll_bulk', campaignId, {
+    count: result.count,
+    requested: contactIds.length,
+  });
+  revalidatePath(`/campaigns/${campaignId}`);
+  return { ok: true, data: { enrolled: result.count } };
+}
+
 export async function enrollContact(campaignId: string, contactId: string): Promise<Result> {
   const session = await requireSession();
   if (!isAdmin(session)) return { ok: false, error: 'Sin permiso.' };
@@ -217,6 +242,53 @@ export async function unenrollContact(campaignId: string, contactId: string): Pr
   await audit(session.user.id, 'unenroll', campaignId, { contactId });
   revalidatePath(`/campaigns/${campaignId}`);
   return { ok: true, data: undefined };
+}
+
+export async function searchContactsForEnroll(
+  campaignId: string,
+  q: string
+): Promise<{
+  ok: true;
+  data: {
+    id: string;
+    fullName: string;
+    email: string;
+    companyName: string | null;
+    enrolled: boolean;
+  }[];
+}> {
+  const session = await requireSession();
+  if (!session?.user?.id) return { ok: true, data: [] };
+
+  const trimmed = q.trim();
+  const where = trimmed.length > 0
+    ? {
+        OR: [
+          { fullName: { contains: trimmed, mode: 'insensitive' as const } },
+          { email: { contains: trimmed, mode: 'insensitive' as const } },
+          { companyName: { contains: trimmed, mode: 'insensitive' as const } },
+        ],
+      }
+    : {};
+
+  const [contacts, alreadyEnrolled] = await Promise.all([
+    prisma.contact.findMany({
+      where,
+      select: { id: true, fullName: true, email: true, companyName: true },
+      orderBy: { fullName: 'asc' },
+      take: 30,
+    }),
+    prisma.campaignContact.findMany({
+      where: { campaignId },
+      select: { contactId: true },
+    }),
+  ]);
+
+  const enrolledSet = new Set(alreadyEnrolled.map((e) => e.contactId));
+  return {
+    ok: true,
+    data: contacts.map((c) => ({ ...c, enrolled: enrolledSet.has(c.id) })),
+  };
 }
 
 export async function setCampaignContactStatus(
