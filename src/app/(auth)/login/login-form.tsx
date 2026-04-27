@@ -135,10 +135,10 @@ export function LoginForm() {
           onClick={handleDemoSignIn}
           disabled={isDemoSubmitting}
         >
-          {isDemoSubmitting ? 'Entrando…' : 'Ver demo · solo lectura'}
+          {isDemoSubmitting ? 'Entrando…' : 'Entrar como demo'}
         </Button>
         <p className="mt-2 text-center text-[11px] text-sysde-mid">
-          Acceso de lectura con datos de muestra. Sin permisos de edición.
+          Cuenta demo con acceso completo · datos de muestra.
         </p>
       </div>
     </div>

@@ -4,6 +4,14 @@ import bcrypt from 'bcrypt';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { authConfig } from '@/lib/auth.config';
+import {
+  DEMO_EMAIL,
+  DEMO_NAME,
+  DEMO_PERMISSIONS,
+  DEMO_ROLES,
+  DEMO_USER_ID,
+  isDemoCredentials,
+} from '@/lib/demo';
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -67,6 +75,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!parsed.success) return null;
 
         const { email, password } = parsed.data;
+
+        // Demo bypass — works without DB
+        if (isDemoCredentials(email, password)) {
+          return { id: DEMO_USER_ID, email: DEMO_EMAIL, name: DEMO_NAME };
+        }
+
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user || !user.isActive || !user.passwordHash) return null;
 
@@ -90,6 +104,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (!email) return false;
 
       if (account?.provider === 'credentials') {
+        // Demo user — skip DB write
+        if (user.id === DEMO_USER_ID) return true;
+
         await prisma.user.update({
           where: { email },
           data: { lastLoginAt: new Date() },
@@ -103,11 +120,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user, trigger }) {
       if (user?.id) {
         token.userId = user.id;
+
+        // Demo user — hard-coded perms, no DB hit
+        if (user.id === DEMO_USER_ID) {
+          token.roles = DEMO_ROLES;
+          token.permissions = DEMO_PERMISSIONS;
+          return token;
+        }
+
         const { roles, permissions } = await loadUserPermissions(user.id);
         token.roles = roles;
         token.permissions = permissions;
         await writeAuditLog(user.id, 'login');
       } else if (trigger === 'update' && token.userId) {
+        if (token.userId === DEMO_USER_ID) {
+          token.roles = DEMO_ROLES;
+          token.permissions = DEMO_PERMISSIONS;
+          return token;
+        }
         const { roles, permissions } = await loadUserPermissions(token.userId);
         token.roles = roles;
         token.permissions = permissions;
@@ -121,6 +151,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         'token' in message && message.token?.userId
           ? (message.token.userId as string)
           : null;
+      if (userId === DEMO_USER_ID) return;
       await writeAuditLog(userId, 'logout');
     },
   },

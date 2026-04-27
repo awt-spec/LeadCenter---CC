@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 
 const DEMO_EMAIL = 'demo@sysde.com';
 const DEMO_PASSWORD = 'demo1234';
-const DEMO_ROLE_KEY = 'reviewer';
+const DEMO_ROLE_KEY = 'admin';
 
 async function main() {
   console.log('🎭 Seeding demo user...');
@@ -19,10 +19,10 @@ async function main() {
 
   const user = await prisma.user.upsert({
     where: { email: DEMO_EMAIL },
-    update: { name: 'Demo (Solo lectura)', isActive: true, passwordHash },
+    update: { name: 'Demo', isActive: true, passwordHash },
     create: {
       email: DEMO_EMAIL,
-      name: 'Demo (Solo lectura)',
+      name: 'Demo',
       isActive: true,
       passwordHash,
     },
