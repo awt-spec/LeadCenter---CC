@@ -21,7 +21,7 @@ import {
   StageChangeConfirm,
   type ConfirmPayload,
 } from './stage-change-confirm';
-import type { PipelineOpportunityCard } from '@/lib/pipeline/queries';
+import type { PipelineOpportunityCard } from '@/lib/pipeline/stats';
 import {
   changeOpportunityStage,
   type KanbanStageChangeInput,

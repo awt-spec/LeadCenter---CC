@@ -33,7 +33,7 @@ import {
   formatMoney,
 } from '@/lib/shared/labels';
 import { getInitials, cn } from '@/lib/utils';
-import type { PipelineOpportunityCard } from '@/lib/pipeline/queries';
+import type { PipelineOpportunityCard } from '@/lib/pipeline/stats';
 
 type Props = {
   card: PipelineOpportunityCard;

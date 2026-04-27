@@ -3,7 +3,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { OpportunityCard } from './opportunity-card';
-import type { PipelineOpportunityCard } from '@/lib/pipeline/queries';
+import type { PipelineOpportunityCard } from '@/lib/pipeline/stats';
 
 type Props = {
   card: PipelineOpportunityCard;

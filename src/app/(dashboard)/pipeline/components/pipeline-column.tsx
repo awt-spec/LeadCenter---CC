@@ -9,7 +9,7 @@ import type { OpportunityStage } from '@prisma/client';
 import { PipelineColumnHeader } from './pipeline-column-header';
 import { SortableCard } from './sortable-card';
 import { EmptyColumn, OverLimitNotice } from './empty-column';
-import { computeColumnStats, type PipelineOpportunityCard } from '@/lib/pipeline/queries';
+import { computeColumnStats, type PipelineOpportunityCard } from '@/lib/pipeline/stats';
 import { STAGE_COLORS } from '@/lib/shared/labels';
 import { cn } from '@/lib/utils';
 

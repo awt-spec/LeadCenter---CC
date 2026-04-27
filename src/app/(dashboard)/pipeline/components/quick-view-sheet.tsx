@@ -24,7 +24,7 @@ import {
   RATING_LABELS,
   formatMoney,
 } from '@/lib/shared/labels';
-import type { PipelineOpportunityCard } from '@/lib/pipeline/queries';
+import type { PipelineOpportunityCard } from '@/lib/pipeline/stats';
 import { getInitials } from '@/lib/utils';
 
 type Props = {
