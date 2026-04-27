@@ -172,6 +172,78 @@ export async function deleteAccount(id: string): Promise<ActionResult> {
   return { ok: true, data: undefined };
 }
 
+export async function setAccountPriority(
+  accountId: string,
+  priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
+): Promise<ActionResult> {
+  const session = await requireSession();
+  if (!can(session, 'accounts:update:all') && !can(session, 'accounts:update:own')) {
+    return { ok: false, error: 'Sin permiso para actualizar la cuenta.' };
+  }
+
+  const before = await prisma.account.findUnique({
+    where: { id: accountId },
+    select: { ownerId: true, priority: true },
+  });
+  if (!before) return { ok: false, error: 'Cuenta no encontrada.' };
+
+  if (!can(session, 'accounts:update:all') && before.ownerId !== session.user.id) {
+    return { ok: false, error: 'Sin permiso para esta cuenta.' };
+  }
+
+  await prisma.account.update({
+    where: { id: accountId },
+    data: { priority },
+  });
+
+  await writeAudit({
+    userId: session.user.id,
+    action: 'priority_change',
+    resourceId: accountId,
+    changes: { from: before.priority, to: priority },
+  });
+
+  revalidatePath('/accounts');
+  revalidatePath(`/accounts/${accountId}`);
+  return { ok: true, data: undefined };
+}
+
+export async function setAccountStatus(
+  accountId: string,
+  status: 'PROSPECT' | 'ACTIVE' | 'CUSTOMER' | 'PARTNER' | 'LOST' | 'INACTIVE' | 'BLOCKED'
+): Promise<ActionResult> {
+  const session = await requireSession();
+  if (!can(session, 'accounts:update:all') && !can(session, 'accounts:update:own')) {
+    return { ok: false, error: 'Sin permiso para actualizar la cuenta.' };
+  }
+
+  const before = await prisma.account.findUnique({
+    where: { id: accountId },
+    select: { ownerId: true, status: true },
+  });
+  if (!before) return { ok: false, error: 'Cuenta no encontrada.' };
+
+  if (!can(session, 'accounts:update:all') && before.ownerId !== session.user.id) {
+    return { ok: false, error: 'Sin permiso para esta cuenta.' };
+  }
+
+  await prisma.account.update({
+    where: { id: accountId },
+    data: { status },
+  });
+
+  await writeAudit({
+    userId: session.user.id,
+    action: 'status_change',
+    resourceId: accountId,
+    changes: { from: before.status, to: status },
+  });
+
+  revalidatePath('/accounts');
+  revalidatePath(`/accounts/${accountId}`);
+  return { ok: true, data: undefined };
+}
+
 export async function linkContactToAccount(
   accountId: string,
   contactId: string

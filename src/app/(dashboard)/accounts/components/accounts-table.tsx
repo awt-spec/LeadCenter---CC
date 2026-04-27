@@ -17,6 +17,7 @@ import {
   formatMoney,
 } from '@/lib/shared/labels';
 import { getInitials } from '@/lib/utils';
+import { PriorityCell, type Priority } from './priority-cell';
 
 export type AccountRow = {
   id: string;
@@ -26,6 +27,7 @@ export type AccountRow = {
   segment: string | null;
   size: string;
   status: string;
+  priority: Priority;
   updatedAt: Date;
   owner: { id: string; name: string; avatarUrl: string | null } | null;
   _count: { contacts: number; opportunities: number };
@@ -80,6 +82,15 @@ export function AccountsTable({ rows, total, page, pageSize }: {
         <span className="text-sm">
           {COMPANY_SIZE_LABELS[row.original.size as keyof typeof COMPANY_SIZE_LABELS] ?? row.original.size}
         </span>
+      ),
+    },
+    {
+      id: 'priority',
+      header: 'Prioridad',
+      cell: ({ row }) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <PriorityCell accountId={row.original.id} initial={row.original.priority} />
+        </div>
       ),
     },
     {

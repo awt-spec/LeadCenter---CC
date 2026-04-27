@@ -144,6 +144,7 @@ model Account {
   address          String?
 
   status           AccountStatus  @default(PROSPECT)
+  priority         AccountPriority @default(NORMAL)
   ownerId          String?
   owner            User?          @relation("AccountOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   parentAccountId  String?
@@ -167,6 +168,14 @@ model Account {
   @@index([ownerId])
   @@index([country])
   @@index([status])
+  @@index([priority])
+}
+
+enum AccountPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
 }
 
 enum CompanySize {

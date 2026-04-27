@@ -61,6 +61,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
     segment: r.segment,
     size: r.size,
     status: r.status,
+    priority: r.priority,
     updatedAt: r.updatedAt,
     owner: r.owner,
     _count: r._count,
