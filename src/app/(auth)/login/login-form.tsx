@@ -49,6 +49,7 @@ export function LoginForm() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const [isDemoSubmitting, setIsDemoSubmitting] = useState(false);
 
   const {
     register,
@@ -82,6 +83,26 @@ export function LoginForm() {
   async function handleGoogleSignIn() {
     setIsGoogleSubmitting(true);
     await signIn('google', { callbackUrl });
+  }
+
+  async function handleDemoSignIn() {
+    setIsDemoSubmitting(true);
+    const result = await signIn('credentials', {
+      email: 'demo@sysde.com',
+      password: 'demo1234',
+      redirect: false,
+    });
+    setIsDemoSubmitting(false);
+
+    if (!result || result.error) {
+      toast.error('No se pudo entrar como demo', {
+        description: 'El usuario demo aún no está creado en la base. Contacta al admin.',
+      });
+      return;
+    }
+
+    router.push(callbackUrl);
+    router.refresh();
   }
 
   return (
@@ -146,6 +167,26 @@ export function LoginForm() {
             {isSubmitting ? 'Ingresando…' : 'Ingresar'}
           </Button>
         </form>
+
+        <div className="my-6 flex items-center gap-3">
+          <div className="h-px flex-1 bg-sysde-border" />
+          <span className="text-xs uppercase tracking-wide text-sysde-mid">demo</span>
+          <div className="h-px flex-1 bg-sysde-border" />
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="xl"
+          className="w-full"
+          onClick={handleDemoSignIn}
+          disabled={isDemoSubmitting}
+        >
+          {isDemoSubmitting ? 'Entrando…' : 'Ver demo · solo lectura'}
+        </Button>
+        <p className="mt-2 text-center text-[11px] text-sysde-mid">
+          Acceso de lectura con datos de muestra. Sin permisos de edición.
+        </p>
       </div>
 
       <p className="mt-6 text-center text-xs text-sysde-mid">
