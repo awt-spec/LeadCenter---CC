@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Building2, Plus } from 'lucide-react';
+import { Building2, Plus, Download } from 'lucide-react';
 import { auth } from '@/lib/auth';
 import { can } from '@/lib/rbac';
 import { Button } from '@/components/ui/button';
@@ -78,14 +78,22 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
             {stats.customers} clientes
           </p>
         </div>
-        {canCreate && (
-          <Button asChild>
-            <Link href="/accounts/new">
-              <Plus className="mr-2 h-4 w-4" />
-              Nueva cuenta
-            </Link>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline">
+            <a href="/accounts/api/export" download>
+              <Download className="mr-2 h-4 w-4" />
+              Exportar CSV
+            </a>
           </Button>
-        )}
+          {canCreate && (
+            <Button asChild>
+              <Link href="/accounts/new">
+                <Plus className="mr-2 h-4 w-4" />
+                Nueva cuenta
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
 
       <AccountStats stats={stats} />

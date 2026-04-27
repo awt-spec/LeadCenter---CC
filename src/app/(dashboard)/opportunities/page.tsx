@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Briefcase, LayoutGrid, Plus, Table as TableIcon } from 'lucide-react';
+import { Briefcase, Download, LayoutGrid, Plus, Table as TableIcon } from 'lucide-react';
 import { auth } from '@/lib/auth';
 import { can } from '@/lib/rbac';
 import { Button } from '@/components/ui/button';
@@ -101,6 +101,12 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
               Kanban
             </Link>
           </div>
+          <Button asChild variant="outline">
+            <a href="/opportunities/api/export" download>
+              <Download className="mr-2 h-4 w-4" />
+              Exportar CSV
+            </a>
+          </Button>
           {canCreate && (
             <Button asChild>
               <Link href="/opportunities/new">

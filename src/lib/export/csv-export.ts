@@ -53,6 +53,108 @@ export function contactsToCsvString(rows: ExportableContact[]): string {
   return Papa.unparse(records);
 }
 
+export type ExportableAccount = {
+  name: string;
+  legalName: string | null;
+  domain: string | null;
+  website: string | null;
+  segment: string | null;
+  industry: string | null;
+  size: string;
+  employeeCount: number | null;
+  annualRevenue: number | null;
+  currency: string;
+  country: string | null;
+  region: string | null;
+  city: string | null;
+  status: string;
+  priority: string;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  contactsCount: number;
+  opportunitiesCount: number;
+  pipelineTotal: number;
+  description: string | null;
+  createdAt: Date;
+};
+
+export function accountsToCsvString(rows: ExportableAccount[]): string {
+  const records = rows.map((a) => ({
+    name: a.name,
+    legal_name: a.legalName ?? '',
+    domain: a.domain ?? '',
+    website: a.website ?? '',
+    segment: a.segment ?? '',
+    industry: a.industry ?? '',
+    size: a.size,
+    employees: a.employeeCount ?? '',
+    annual_revenue: a.annualRevenue ?? '',
+    currency: a.currency,
+    country: a.country ?? '',
+    region: a.region ?? '',
+    city: a.city ?? '',
+    status: a.status,
+    priority: a.priority,
+    owner_name: a.ownerName ?? '',
+    owner_email: a.ownerEmail ?? '',
+    contacts_count: a.contactsCount,
+    opportunities_count: a.opportunitiesCount,
+    pipeline_total: a.pipelineTotal,
+    description: a.description ?? '',
+    created_at: a.createdAt.toISOString(),
+  }));
+  return Papa.unparse(records);
+}
+
+export type ExportableOpportunity = {
+  code: string | null;
+  name: string;
+  accountName: string;
+  product: string;
+  subProduct: string | null;
+  stage: string;
+  status: string;
+  rating: string;
+  probability: number;
+  estimatedValue: number | null;
+  currency: string;
+  commercialModel: string;
+  expectedCloseDate: Date | null;
+  closedAt: Date | null;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  source: string;
+  lostReason: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export function opportunitiesToCsvString(rows: ExportableOpportunity[]): string {
+  const records = rows.map((o) => ({
+    code: o.code ?? '',
+    name: o.name,
+    account: o.accountName,
+    product: o.product,
+    sub_product: o.subProduct ?? '',
+    stage: o.stage,
+    status: o.status,
+    rating: o.rating,
+    probability: o.probability,
+    estimated_value: o.estimatedValue ?? '',
+    currency: o.currency,
+    commercial_model: o.commercialModel,
+    expected_close: o.expectedCloseDate ? o.expectedCloseDate.toISOString().slice(0, 10) : '',
+    closed_at: o.closedAt ? o.closedAt.toISOString().slice(0, 10) : '',
+    owner_name: o.ownerName ?? '',
+    owner_email: o.ownerEmail ?? '',
+    source: o.source,
+    lost_reason: o.lostReason ?? '',
+    created_at: o.createdAt.toISOString(),
+    updated_at: o.updatedAt.toISOString(),
+  }));
+  return Papa.unparse(records);
+}
+
 export function triggerCsvDownload(csv: string, filenamePrefix = 'contactos-sysde') {
   const date = new Date().toISOString().slice(0, 10);
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
