@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 60 9% 98%;
+    --foreground: 0 0% 24%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 24%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 24%;
+
+    --primary: 6 86% 42%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 24%;
+
+    --muted: 0 0% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 24%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 6 86% 42%;
+
+    --radius: 12px;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-sysde-border;
+  }
+  html,
+  body {
+    @apply bg-sysde-bg text-sysde-gray antialiased;
+    font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv11', 'ss01';
+    font-variation-settings: 'opsz' 32;
+  }
+}

@@ -1,0 +1,753 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ==================== AUTH & RBAC ====================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  avatarUrl     String?
+  passwordHash  String?
+  googleId      String?   @unique
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  roles                  UserRole[]
+  sessions               Session[]
+  auditLogs              AuditLog[]
+  ownedContacts          Contact[]       @relation("ContactOwner")
+  createdContacts        Contact[]       @relation("ContactCreator")
+  importBatches          ImportBatch[]
+  ownedAccounts          Account[]       @relation("AccountOwner")
+  createdAccounts        Account[]       @relation("AccountCreator")
+  ownedOpportunities     Opportunity[]   @relation("OpportunityOwner")
+  createdOpportunities   Opportunity[]   @relation("OpportunityCreator")
+  stageChanges           StageHistory[]
+  createdActivities      Activity[]          @relation("ActivityCreator")
+  nextActionAssignments  Activity[]          @relation("NextActionAssignee")
+  mentions               ActivityMention[]   @relation("ActivityMentions")
+  notifications          Notification[]
+
+  @@index([email])
+}
+
+model Role {
+  id           String           @id @default(cuid())
+  key          String           @unique
+  name         String
+  description  String?
+  isSystem     Boolean          @default(false)
+  createdAt    DateTime         @default(now())
+
+  users        UserRole[]
+  permissions  RolePermission[]
+}
+
+model Permission {
+  id           String           @id @default(cuid())
+  key          String           @unique
+  resource     String
+  action       String
+  description  String?
+
+  roles        RolePermission[]
+
+  @@index([resource])
+}
+
+model UserRole {
+  userId    String
+  roleId    String
+  grantedAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  ipAddress    String?
+  userAgent    String?
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ==================== AUDIT LOG ====================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  changes    Json?
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+}
+
+// ==================== ACCOUNTS ====================
+
+model Account {
+  id               String   @id @default(cuid())
+
+  name             String
+  legalName        String?
+  domain           String?  @unique
+  website          String?
+
+  segment          MarketSegment?
+  industry         String?
+  subIndustry      String?
+  size             CompanySize    @default(UNKNOWN)
+  employeeCount    Int?
+  annualRevenue    Decimal?       @db.Decimal(18, 2)
+  currency         String         @default("USD")
+
+  country          String?
+  region           String?
+  city             String?
+  address          String?
+
+  status           AccountStatus  @default(PROSPECT)
+  ownerId          String?
+  owner            User?          @relation("AccountOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  parentAccountId  String?
+  parentAccount    Account?       @relation("AccountHierarchy", fields: [parentAccountId], references: [id], onDelete: SetNull)
+  childAccounts    Account[]      @relation("AccountHierarchy")
+
+  description      String?        @db.Text
+  internalNotes    String?        @db.Text
+
+  createdById      String?
+  createdBy        User?          @relation("AccountCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  contacts         Contact[]
+  opportunities    Opportunity[]
+  activities       Activity[]
+
+  @@index([name])
+  @@index([domain])
+  @@index([ownerId])
+  @@index([country])
+  @@index([status])
+}
+
+enum CompanySize {
+  UNKNOWN
+  MICRO
+  SMALL
+  MEDIUM
+  LARGE
+  ENTERPRISE
+}
+
+enum AccountStatus {
+  PROSPECT
+  ACTIVE
+  CUSTOMER
+  PARTNER
+  LOST
+  INACTIVE
+  BLOCKED
+}
+
+// ==================== CONTACTS ====================
+
+model Contact {
+  id               String   @id @default(cuid())
+
+  email            String   @unique
+  firstName        String
+  lastName         String
+  fullName         String
+
+  avatarUrl        String?
+  jobTitle         String?
+  department       String?
+  seniorityLevel   SeniorityLevel @default(UNKNOWN)
+
+  companyName      String?
+  accountId        String?
+  account          Account?         @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  country          String?
+  city             String?
+  timezone         String?
+
+  phone            String?
+  mobilePhone      String?
+  linkedinUrl      String?
+  website          String?
+
+  source           ContactSource    @default(UNKNOWN)
+  sourceDetail     String?
+  status           ContactStatus    @default(ACTIVE)
+  ownerId          String?
+  owner            User?            @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  marketSegment    MarketSegment?
+  productInterest  ProductInterest[] @default([])
+
+  optIn            Boolean          @default(false)
+  optInDate        DateTime?
+  doNotContact     Boolean          @default(false)
+
+  lastContactedAt  DateTime?
+  lastActivityAt   DateTime?
+  engagementScore  Int              @default(0)
+
+  notes            String?          @db.Text
+
+  createdById      String?
+  createdBy        User?            @relation("ContactCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  importBatchId    String?
+  importBatch      ImportBatch?     @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  tags             ContactTag[]
+  opportunityRoles OpportunityContact[]
+  activities       Activity[]
+  participantIn    ActivityParticipant[]
+
+  @@index([email])
+  @@index([ownerId])
+  @@index([status])
+  @@index([country])
+  @@index([accountId])
+  @@index([createdAt])
+  @@index([fullName])
+}
+
+enum SeniorityLevel {
+  UNKNOWN
+  ANALYST
+  MANAGER
+  DIRECTOR
+  VP
+  C_LEVEL
+  OWNER
+}
+
+enum ContactSource {
+  UNKNOWN
+  WEBSITE_CHAT
+  WEBSITE_FORM
+  LINKEDIN
+  LINKEDIN_INBOUND
+  LINKEDIN_OUTBOUND
+  EMAIL_INBOUND
+  REFERRAL
+  EVENT
+  WEBINAR
+  OUTBOUND_CAMPAIGN
+  CSV_IMPORT
+  MANUAL
+  PARTNER
+}
+
+enum ContactStatus {
+  ACTIVE
+  NURTURE
+  COLD
+  DO_NOT_CONTACT
+  UNSUBSCRIBED
+  BOUNCED
+  ARCHIVED
+}
+
+enum MarketSegment {
+  BANK
+  FINANCE_COMPANY
+  MICROFINANCE
+  COOPERATIVE
+  PENSION_FUND
+  INSURANCE
+  FINTECH
+  RETAIL
+  CONSULTING
+  OTHER
+}
+
+enum ProductInterest {
+  SAF_PLUS
+  SAF_LEASING
+  SAF_FACTORING
+  FILEMASTER
+  FACTORAJE_ONCLOUD
+  SYSDE_PENSION
+  SENTINEL_PLD
+}
+
+model Tag {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  color       String       @default("#64748B")
+  description String?
+  createdAt   DateTime     @default(now())
+
+  contacts    ContactTag[]
+}
+
+model ContactTag {
+  contactId String
+  tagId     String
+
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, tagId])
+}
+
+// ==================== IMPORT BATCHES ====================
+
+model ImportBatch {
+  id              String            @id @default(cuid())
+  fileName        String
+  fileSize        Int
+  totalRows       Int
+  createdCount    Int               @default(0)
+  updatedCount    Int               @default(0)
+  skippedCount    Int               @default(0)
+  failedCount     Int               @default(0)
+  status          ImportStatus      @default(PENDING)
+  columnMapping   Json
+  dedupeStrategy  DedupeStrategy    @default(SKIP)
+  defaultValues   Json?
+  errors          Json?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdById     String
+  createdBy       User              @relation(fields: [createdById], references: [id])
+  createdAt       DateTime          @default(now())
+
+  contacts        Contact[]
+
+  @@index([createdById])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED
+}
+
+enum DedupeStrategy {
+  SKIP
+  UPDATE
+  CREATE_NEW
+}
+
+// ==================== OPPORTUNITIES ====================
+
+model Opportunity {
+  id                  String   @id @default(cuid())
+
+  name                String
+  code                String?  @unique
+
+  accountId           String
+  account             Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  product             SysdeProduct
+  subProduct          SysdeSubProduct?
+
+  stage               OpportunityStage  @default(LEAD)
+  stageChangedAt      DateTime          @default(now())
+  previousStage       OpportunityStage?
+  status              OpportunityStatus @default(OPEN)
+
+  rating              OpportunityRating @default(UNSCORED)
+  probability         Int               @default(10)
+
+  estimatedValue      Decimal?          @db.Decimal(18, 2)
+  currency            String            @default("USD")
+  commercialModel     CommercialModel   @default(UNDEFINED)
+
+  portfolioAmount     Decimal?          @db.Decimal(18, 2)
+  userCount           Int?
+  annualOperations    Int?
+  clientCount         Int?
+  officeCount         Int?
+
+  expectedCloseDate   DateTime?
+  closedAt            DateTime?
+  lastActivityAt      DateTime?
+  nextActionDate      DateTime?
+  nextActionNote      String?
+
+  source              ContactSource     @default(UNKNOWN)
+  sourceDetail        String?
+  isDirectProspecting Boolean           @default(false)
+  referredById        String?
+
+  lostReason          LostReason?
+  lostReasonDetail    String?
+  competitorWon       String?
+  wonReason           String?
+
+  ownerId             String?
+  owner               User?             @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  description         String?           @db.Text
+  internalNotes       String?           @db.Text
+
+  createdById         String?
+  createdBy           User?             @relation("OpportunityCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  contactRoles        OpportunityContact[]
+  stageHistory        StageHistory[]
+  activities          Activity[]
+
+  @@index([accountId])
+  @@index([ownerId])
+  @@index([stage])
+  @@index([status])
+  @@index([product])
+  @@index([expectedCloseDate])
+  @@index([createdAt])
+}
+
+enum OpportunityStage {
+  LEAD
+  DISCOVERY
+  SIZING
+  DEMO
+  PROPOSAL
+  NEGOTIATION
+  CLOSING
+  HANDOFF
+  WON
+  LOST
+  STAND_BY
+  NURTURE
+}
+
+enum OpportunityStatus {
+  OPEN
+  WON
+  LOST
+  STAND_BY
+  NURTURE
+}
+
+enum OpportunityRating {
+  UNSCORED
+  A_PLUS
+  A
+  B_PLUS
+  B
+  C
+  D
+}
+
+enum SysdeProduct {
+  SAF_PLUS
+  FILEMASTER
+  FACTORAJE_ONCLOUD
+  SYSDE_PENSION
+  SENTINEL_PLD
+  CUSTOM
+}
+
+enum SysdeSubProduct {
+  SAF_CREDIT
+  SAF_LEASING
+  SAF_FACTORING
+  SAF_FULL
+  FM_DOCUMENTS
+  FM_BPM
+  FM_FULL
+  PENSION_RECORDKEEPING
+  PLD_FULL
+  PLD_MONITORING
+  FACTORAJE_REVERSE
+  FACTORAJE_DIRECT
+  NONE
+}
+
+enum CommercialModel {
+  UNDEFINED
+  SAAS
+  ON_PREMISE
+  HYBRID
+  LICENSE_PERPETUAL
+  TIME_AND_MATERIALS
+}
+
+enum LostReason {
+  PRICE
+  COMPETITOR
+  TIMING
+  NO_BUDGET
+  NO_DECISION
+  NO_FIT
+  INTERNAL_DEV
+  NO_RESPONSE
+  PROJECT_CANCELLED
+  OTHER
+}
+
+model OpportunityContact {
+  opportunityId String
+  contactId     String
+  role          ContactRole  @default(INFLUENCER)
+  isPrimary     Boolean      @default(false)
+  notes         String?
+  addedAt       DateTime     @default(now())
+
+  opportunity   Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  contact       Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([opportunityId, contactId])
+  @@index([contactId])
+}
+
+enum ContactRole {
+  SPONSOR
+  DECISION_MAKER
+  CHAMPION
+  TECHNICAL_BUYER
+  USER
+  INFLUENCER
+  BLOCKER
+  GATEKEEPER
+}
+
+model StageHistory {
+  id                  String           @id @default(cuid())
+  opportunityId       String
+  fromStage           OpportunityStage?
+  toStage             OpportunityStage
+  changedById         String?
+  changedAt           DateTime         @default(now())
+  daysInPreviousStage Int?
+  notes               String?
+
+  opportunity         Opportunity      @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  changedBy           User?            @relation(fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([opportunityId])
+  @@index([changedAt])
+}
+
+// ==================== ACTIVITIES ====================
+
+model Activity {
+  id                    String          @id @default(cuid())
+
+  type                  ActivityType
+  subtype               String?
+  subject               String
+  bodyJson              Json?
+  bodyText              String?         @db.Text
+
+  tags                  ActivityTag[]   @default([])
+
+  occurredAt            DateTime        @default(now())
+  durationMinutes       Int?
+
+  contactId             String?
+  contact               Contact?        @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  accountId             String?
+  account               Account?        @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  opportunityId         String?
+  opportunity           Opportunity?    @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  participants          ActivityParticipant[]
+  mentions              ActivityMention[]
+
+  nextActionType        NextActionType?
+  nextActionNote        String?
+  nextActionDate        DateTime?
+  nextActionAssigneeId  String?
+  nextActionAssignee    User?           @relation("NextActionAssignee", fields: [nextActionAssigneeId], references: [id], onDelete: SetNull)
+  nextActionCompleted   Boolean         @default(false)
+  nextActionCompletedAt DateTime?
+
+  outcome               ActivityOutcome?
+
+  attachments           ActivityAttachment[]
+
+  isSystemGenerated     Boolean         @default(false)
+  systemEventType       String?
+  systemMetadata        Json?
+
+  templateKey           String?
+
+  createdById           String
+  createdBy             User            @relation("ActivityCreator", fields: [createdById], references: [id])
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  @@index([contactId])
+  @@index([accountId])
+  @@index([opportunityId])
+  @@index([createdById])
+  @@index([occurredAt])
+  @@index([type])
+  @@index([nextActionDate])
+}
+
+enum ActivityType {
+  CALL
+  EMAIL_SENT
+  EMAIL_RECEIVED
+  WHATSAPP
+  MEETING
+  DEMO
+  MATERIAL_SENT
+  PROPOSAL_SENT
+  INTERNAL_NOTE
+  TASK
+  STAGE_CHANGE
+  CONTACT_LINKED
+  STATUS_CHANGE
+  FILE_SHARED
+  LINKEDIN_MESSAGE
+  EVENT_ATTENDED
+}
+
+enum ActivityTag {
+  BL
+  INFO
+  CONSUL
+  SOLIC
+  URGENT
+  FOLLOWUP
+  WIN_SIGNAL
+  RISK_SIGNAL
+}
+
+enum ActivityOutcome {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+  BLOCKER
+  NO_RESPONSE
+}
+
+enum NextActionType {
+  CALL
+  EMAIL
+  WHATSAPP
+  MEETING
+  DEMO
+  SEND_PROPOSAL
+  SEND_MATERIAL
+  INTERNAL_TASK
+  WAIT_FOR_CLIENT
+  OTHER
+}
+
+model ActivityParticipant {
+  activityId String
+  contactId  String
+  role       String?
+
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  contact    Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([activityId, contactId])
+}
+
+model ActivityMention {
+  activityId      String
+  mentionedUserId String
+  readAt          DateTime?
+
+  activity        Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  mentionedUser   User     @relation("ActivityMentions", fields: [mentionedUserId], references: [id], onDelete: Cascade)
+
+  @@id([activityId, mentionedUserId])
+  @@index([mentionedUserId, readAt])
+}
+
+model ActivityAttachment {
+  id         String   @id @default(cuid())
+  activityId String
+  fileName   String
+  fileUrl    String
+  fileSize   Int
+  mimeType   String
+  uploadedAt DateTime @default(now())
+
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@index([activityId])
+}
+
+// ==================== NOTIFICATIONS ====================
+
+model Notification {
+  id         String   @id @default(cuid())
+  userId     String
+  type       NotificationType
+  title      String
+  body       String?
+  link       String?
+  isRead     Boolean  @default(false)
+  readAt     DateTime?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+enum NotificationType {
+  MENTION
+  ASSIGNED_NEXT_ACTION
+  NEXT_ACTION_DUE
+  OPPORTUNITY_STALE
+  STAGE_CHANGED
+  CONTACT_ASSIGNED
+  SYSTEM
+}
