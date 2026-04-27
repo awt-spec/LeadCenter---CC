@@ -7,7 +7,7 @@ CRM interno de SYSDE Internacional Inc. para reemplazar el uso de Asana como CRM
 - **Framework:** Next.js 15 (App Router) + TypeScript (strict)
 - **UI:** Tailwind CSS v3 + shadcn/ui + Lucide icons
 - **DB:** PostgreSQL gestionado por Supabase, accedido vía Prisma ORM
-- **Auth:** NextAuth v5 (Auth.js) con Google Provider (`hd: sysde.com`) y Credentials
+- **Auth:** NextAuth v5 (Auth.js) — Credentials provider (email + password)
 - **Validación:** Zod + React Hook Form
 - **Email:** Resend (configurado, no usado aún)
 - **Package manager:** pnpm
@@ -32,7 +32,6 @@ CRM interno de SYSDE Internacional Inc. para reemplazar el uso de Asana como CRM
    Edita `.env.local` con:
    - `DATABASE_URL` y `DIRECT_URL` de Supabase (Settings → Database → Connection string)
    - `AUTH_SECRET`: generar con `openssl rand -base64 32`
-   - `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` del OAuth consent screen
    - `SEED_ADMIN_PASSWORD`: contraseña temporal para el admin inicial
 
 4. **Crear proyecto en Supabase** y pegar los connection strings en `.env.local`.
@@ -52,7 +51,7 @@ CRM interno de SYSDE Internacional Inc. para reemplazar el uso de Asana como CRM
    pnpm dev
    ```
 
-Visita `http://localhost:3000`. Serás redirigido a `/login`. Usa las credenciales del admin seed (`alwheelock@sysde.com` + `SEED_ADMIN_PASSWORD`) o el botón de Google con una cuenta `@sysde.com`.
+Visita `http://localhost:3000`. Serás redirigido a `/login`. Entra con las credenciales del admin seed (`alwheelock@sysde.com` + `SEED_ADMIN_PASSWORD`) o usa el botón **"Ver demo"** (después de correr `pnpm db:seed:demo`) para entrar como `demo@sysde.com` / `demo1234` con permisos de solo lectura.
 
 ## Estructura de carpetas
 

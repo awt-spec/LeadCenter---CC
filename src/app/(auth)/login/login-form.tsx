@@ -18,29 +18,6 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-function GoogleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
-      <path
-        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.75h3.57c2.08-1.92 3.28-4.74 3.28-8.07z"
-        fill="#4285F4"
-      />
-      <path
-        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.75c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A10.98 10.98 0 0 0 12 23z"
-        fill="#34A853"
-      />
-      <path
-        d="M5.84 14.12a6.6 6.6 0 0 1 0-4.24V7.04H2.18a10.98 10.98 0 0 0 0 9.92l3.66-2.84z"
-        fill="#FBBC05"
-      />
-      <path
-        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.04l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"
-        fill="#EA4335"
-      />
-    </svg>
-  );
-}
-
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -48,7 +25,6 @@ export function LoginForm() {
   const errorParam = searchParams.get('error');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [isDemoSubmitting, setIsDemoSubmitting] = useState(false);
 
   const {
@@ -78,11 +54,6 @@ export function LoginForm() {
 
     router.push(callbackUrl);
     router.refresh();
-  }
-
-  async function handleGoogleSignIn() {
-    setIsGoogleSubmitting(true);
-    await signIn('google', { callbackUrl });
   }
 
   async function handleDemoSignIn() {
@@ -116,27 +87,9 @@ export function LoginForm() {
 
         {errorParam && (
           <div className="mb-6 rounded-lg bg-sysde-red-light px-4 py-3 text-sm text-sysde-red">
-            No pudimos iniciar sesión. Verifica que uses una cuenta @sysde.com activa.
+            No pudimos iniciar sesión. Verifica tu email y contraseña.
           </div>
         )}
-
-        <Button
-          type="button"
-          variant="outline"
-          size="xl"
-          className="w-full gap-3"
-          onClick={handleGoogleSignIn}
-          disabled={isGoogleSubmitting}
-        >
-          <GoogleIcon />
-          <span>Continuar con Google</span>
-        </Button>
-
-        <div className="my-6 flex items-center gap-3">
-          <div className="h-px flex-1 bg-sysde-border" />
-          <span className="text-xs uppercase tracking-wide text-sysde-mid">o</span>
-          <div className="h-px flex-1 bg-sysde-border" />
-        </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
@@ -188,10 +141,6 @@ export function LoginForm() {
           Acceso de lectura con datos de muestra. Sin permisos de edición.
         </p>
       </div>
-
-      <p className="mt-6 text-center text-xs text-sysde-mid">
-        Solo usuarios con cuenta corporativa @sysde.com
-      </p>
     </div>
   );
 }

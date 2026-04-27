@@ -3,7 +3,6 @@ import Credentials from 'next-auth/providers/credentials';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { ALLOWED_EMAIL_DOMAIN } from '@/lib/constants';
 import { authConfig } from '@/lib/auth.config';
 
 const credentialsSchema = z.object({
@@ -89,32 +88,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ user, account }) {
       const email = user.email?.toLowerCase();
       if (!email) return false;
-
-      if (account?.provider === 'google') {
-        if (!email.endsWith(`@${ALLOWED_EMAIL_DOMAIN}`)) return false;
-
-        const dbUser = await prisma.user.upsert({
-          where: { email },
-          update: {
-            name: user.name ?? email,
-            avatarUrl: user.image ?? undefined,
-            googleId: account.providerAccountId,
-            lastLoginAt: new Date(),
-          },
-          create: {
-            email,
-            name: user.name ?? email,
-            avatarUrl: user.image ?? undefined,
-            googleId: account.providerAccountId,
-            isActive: true,
-            lastLoginAt: new Date(),
-          },
-        });
-
-        if (!dbUser.isActive) return false;
-        user.id = dbUser.id;
-        return true;
-      }
 
       if (account?.provider === 'credentials') {
         await prisma.user.update({
