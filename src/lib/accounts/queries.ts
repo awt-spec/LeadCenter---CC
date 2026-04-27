@@ -46,7 +46,16 @@ export async function listAccounts(session: Session, filters: AccountFilters) {
   const [rows, total] = await Promise.all([
     prisma.account.findMany({
       where,
-      include: {
+      select: {
+        id: true,
+        name: true,
+        domain: true,
+        country: true,
+        segment: true,
+        size: true,
+        status: true,
+        priority: true,
+        updatedAt: true,
         owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
         _count: { select: { contacts: true, opportunities: true } },
         opportunities: {

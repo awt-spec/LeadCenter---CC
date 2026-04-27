@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ClickableRow } from './clickable-row';
 import { getAccountById } from '@/lib/accounts/queries';
 import {
   ACCOUNT_STATUS_LABELS,
@@ -315,11 +316,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
                   </TableHeader>
                   <TableBody>
                     {account.opportunities.map((o) => (
-                      <TableRow
-                        key={o.id}
-                        className="cursor-pointer"
-                        onClick={() => { window.location.href = `/opportunities/${o.id}`; }}
-                      >
+                      <ClickableRow key={o.id} href={`/opportunities/${o.id}`}>
                         <TableCell className="font-mono text-xs">{o.code}</TableCell>
                         <TableCell className="font-medium">{o.name}</TableCell>
                         <TableCell>{PRODUCT_LABELS[o.product]}</TableCell>
@@ -343,7 +340,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
                             ? format(o.expectedCloseDate, "d LLL yyyy", { locale: es })
                             : '—'}
                         </TableCell>
-                      </TableRow>
+                      </ClickableRow>
                     ))}
                   </TableBody>
                 </Table>
