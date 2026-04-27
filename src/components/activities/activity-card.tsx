@@ -26,6 +26,7 @@ import {
 import { getTemplate } from '@/lib/activities/templates';
 import { ActivityTagBadge } from './activity-tag-badge';
 import { AssigneePicker } from './assignee-picker';
+import { AttachmentsList } from './attachments-list';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -277,6 +278,12 @@ export function ActivityCard({ activity, currentUserId, hideRelations, allUsers 
             </div>
           </div>
         )}
+
+        <AttachmentsList
+          activityId={activity.id}
+          attachments={activity.attachments}
+          canEdit={canEdit}
+        />
 
         {/* Linked entities (if global timeline) */}
         {!hideRelations && (
