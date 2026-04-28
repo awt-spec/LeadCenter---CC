@@ -131,9 +131,7 @@ export function FunnelChart({
                 className="h-full rounded-full transition-all"
                 style={{
                   width: `${pct}%`,
-                  background: `linear-gradient(90deg, ${COLORS[i % COLORS.length]}, ${
-                    COLORS[(i + 1) % COLORS.length]
-                  })`,
+                  background: COLORS[i % COLORS.length],
                 }}
               />
             </div>

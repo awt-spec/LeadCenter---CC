@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Shield, Mail } from 'lucide-react';
+import { Shield, Mail, Settings2 } from 'lucide-react';
 import { auth } from '@/lib/auth';
 import { can, hasRole } from '@/lib/rbac';
 import { prisma } from '@/lib/db';
@@ -41,13 +41,20 @@ export default async function UsersSettingsPage() {
             {users.length} usuarios · asigna roles tocando los pills.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/settings/roles"
             className="inline-flex items-center gap-1.5 rounded-md border border-sysde-border bg-white px-3 py-1.5 text-xs font-medium text-sysde-gray transition-colors hover:bg-sysde-bg"
           >
             <Shield className="h-3.5 w-3.5" />
             Roles y permisos
+          </Link>
+          <Link
+            href="/settings/custom-fields"
+            className="inline-flex items-center gap-1.5 rounded-md border border-sysde-border bg-white px-3 py-1.5 text-xs font-medium text-sysde-gray transition-colors hover:bg-sysde-bg"
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+            Campos personalizados
           </Link>
         </div>
       </div>

@@ -39,8 +39,10 @@ export function Topbar({ notifications, unreadCount }: Props) {
   const title = resolveTitle(pathname);
 
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-sysde-border bg-white px-8">
-      <h1 className="text-[18px] font-semibold text-sysde-gray">{title}</h1>
+    <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-sysde-border bg-white px-4 pl-14 sm:px-6 lg:px-8 lg:pl-8">
+      <h1 className="font-display text-[15px] font-semibold uppercase tracking-wider text-sysde-gray">
+        {title}
+      </h1>
 
       <div className="flex items-center gap-3">
         <div className="relative hidden md:block">

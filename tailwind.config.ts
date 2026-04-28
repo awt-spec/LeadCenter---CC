@@ -74,6 +74,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-montserrat)', 'var(--font-inter)', 'system-ui', 'sans-serif'],
       },
       transitionDuration: {
         DEFAULT: '200ms',

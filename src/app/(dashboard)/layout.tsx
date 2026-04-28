@@ -32,9 +32,9 @@ export default async function DashboardLayout({
     <AuthSessionProvider>
       <div className="min-h-screen bg-sysde-bg">
         <Sidebar user={user} permissions={session.user.permissions ?? []} />
-        <div className="pl-[240px]">
+        <div className="lg:pl-[240px]">
           <Topbar notifications={notifications} unreadCount={unreadCount} />
-          <main className="min-h-[calc(100vh-56px)] p-8">{children}</main>
+          <main className="min-h-[calc(100vh-56px)] p-4 sm:p-6 lg:p-8">{children}</main>
         </div>
       </div>
     </AuthSessionProvider>

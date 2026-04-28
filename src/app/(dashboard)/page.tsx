@@ -144,9 +144,12 @@ export default async function HomePage() {
   const name = session.user.name?.split(' ')[0] ?? 'colega';
 
   return (
-    <div className="mx-auto max-w-7xl space-y-8">
+    <div className="mx-auto max-w-7xl space-y-6 lg:space-y-8">
       <div>
-        <h2 className="text-3xl font-semibold tracking-tight text-sysde-gray">
+        <p className="font-display text-[11px] font-semibold uppercase tracking-[0.18em] text-sysde-red">
+          Lead Center
+        </p>
+        <h2 className="mt-1 font-display text-2xl font-bold tracking-tight text-sysde-gray sm:text-3xl">
           Hola, {name}
         </h2>
         <p className="mt-1 text-sm text-sysde-mid">
@@ -309,14 +312,18 @@ function KpiCard({
 }) {
   return (
     <Link href={href}>
-      <Card className="group relative overflow-hidden p-5 transition-all hover:border-sysde-red/40 hover:shadow-md">
+      <Card className="group relative h-full overflow-hidden border-b-[3px] border-b-transparent p-4 transition-all hover:border-b-sysde-red hover:shadow-md sm:p-5">
         <div className="flex items-start justify-between">
           <div className="rounded-lg bg-sysde-red-light p-2">{icon}</div>
           <ArrowUpRight className="h-4 w-4 text-sysde-mid opacity-0 transition-opacity group-hover:opacity-100" />
         </div>
-        <div className="mt-4">
-          <div className="text-2xl font-semibold text-sysde-gray">{value}</div>
-          <div className="mt-0.5 text-xs text-sysde-mid">{label}</div>
+        <div className="mt-3 sm:mt-4">
+          <div className="font-display text-2xl font-bold text-sysde-red sm:text-3xl">
+            {value}
+          </div>
+          <div className="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-sysde-mid">
+            {label}
+          </div>
           {subtitle && <div className="mt-1 text-[11px] text-sysde-mid">{subtitle}</div>}
         </div>
       </Card>

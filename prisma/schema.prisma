@@ -170,6 +170,7 @@ model Account {
   opportunities    Opportunity[]
   activities       Activity[]
   tasks            Task[]
+  customFields     CustomFieldValue[] @relation("AccountCustomFields")
 
   @@index([name])
   @@index([domain])
@@ -265,6 +266,7 @@ model Contact {
   participantIn    ActivityParticipant[]
   campaigns        CampaignContact[]
   tasks            Task[]
+  customFields     CustomFieldValue[] @relation("ContactCustomFields")
 
   @@index([email])
   @@index([ownerId])
@@ -466,6 +468,7 @@ model Opportunity {
   stageHistory        StageHistory[]
   activities          Activity[]
   tasks               Task[]
+  customFields        CustomFieldValue[] @relation("OpportunityCustomFields")
 
   campaignId          String?
   campaign            Campaign?         @relation("CampaignOpportunities", fields: [campaignId], references: [id], onDelete: SetNull)
@@ -927,6 +930,71 @@ enum CampaignContactStatus {
   BOUNCED
   REPLIED
   CONVERTED
+}
+
+// ==================== CUSTOM FIELDS (flexible schema per entity) ====================
+
+model CustomFieldDefinition {
+  id          String          @id @default(cuid())
+  entity      CustomFieldEntity
+  key         String
+  label       String
+  type        CustomFieldType
+  options     Json?
+  required    Boolean         @default(false)
+  position    Int             @default(0)
+  description String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  values      CustomFieldValue[]
+
+  @@unique([entity, key])
+  @@index([entity, position])
+}
+
+enum CustomFieldEntity {
+  CONTACT
+  ACCOUNT
+  OPPORTUNITY
+}
+
+enum CustomFieldType {
+  TEXT
+  LONG_TEXT
+  NUMBER
+  DATE
+  BOOLEAN
+  SELECT
+  MULTI_SELECT
+  URL
+  EMAIL
+  PHONE
+}
+
+model CustomFieldValue {
+  id            String   @id @default(cuid())
+  fieldId       String
+  field         CustomFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  contactId     String?
+  contact       Contact? @relation("ContactCustomFields", fields: [contactId], references: [id], onDelete: Cascade)
+
+  accountId     String?
+  account       Account? @relation("AccountCustomFields", fields: [accountId], references: [id], onDelete: Cascade)
+
+  opportunityId String?
+  opportunity   Opportunity? @relation("OpportunityCustomFields", fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  value         Json
+  updatedAt     DateTime @updatedAt
+
+  @@unique([fieldId, contactId])
+  @@unique([fieldId, accountId])
+  @@unique([fieldId, opportunityId])
+  @@index([contactId])
+  @@index([accountId])
+  @@index([opportunityId])
 }
 
 // ==================== TASKS (Asana-style task board per account) ====================
