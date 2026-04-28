@@ -18,13 +18,27 @@ export async function listContacts(session: Session, filters: ContactFilters) {
 
   if (filters.q) {
     const q = filters.q.trim();
-    and.push({
-      OR: [
-        { fullName: { contains: q, mode: 'insensitive' } },
-        { email: { contains: q, mode: 'insensitive' } },
-        { companyName: { contains: q, mode: 'insensitive' } },
-      ],
-    });
+    if (q.length > 0) {
+      // Use Postgres full-text search (GIN index) for sub-millisecond
+      // lookups at scale. Falls back to ILIKE if FTS returns nothing.
+      const matchedIds = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "Contact"
+        WHERE search_vector @@ plainto_tsquery('spanish', ${q})
+        LIMIT 5000
+      `;
+      if (matchedIds.length > 0) {
+        and.push({ id: { in: matchedIds.map((r) => r.id) } });
+      } else {
+        // Fallback for partial / typo matches
+        and.push({
+          OR: [
+            { fullName: { contains: q, mode: 'insensitive' } },
+            { email: { contains: q, mode: 'insensitive' } },
+            { companyName: { contains: q, mode: 'insensitive' } },
+          ],
+        });
+      }
+    }
   }
   if (filters.country?.length) and.push({ country: { in: filters.country } });
   if (filters.status?.length) and.push({ status: { in: filters.status } });

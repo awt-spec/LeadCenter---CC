@@ -58,6 +58,17 @@ export const DEMO_PERMISSIONS = [
 
 export const DEMO_ROLES = ['admin'];
 
+// The demo bypass is OFF in production unless DEMO_MODE=true is set
+// in env. This protects real deployments from a well-known credential
+// path being usable forever, while still letting us run public demos.
+export function isDemoEnabled(): boolean {
+  if (process.env.DEMO_MODE === 'true') return true;
+  if (process.env.DEMO_MODE === 'false') return false;
+  // Default: enabled outside production
+  return process.env.NODE_ENV !== 'production';
+}
+
 export function isDemoCredentials(email: string, password: string): boolean {
+  if (!isDemoEnabled()) return false;
   return email === DEMO_EMAIL && password === DEMO_PASSWORD;
 }

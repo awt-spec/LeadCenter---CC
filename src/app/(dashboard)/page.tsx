@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { unstable_cache } from 'next/cache';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { can } from '@/lib/rbac';
@@ -25,7 +26,13 @@ function formatMoney(n: number, currency = 'USD'): string {
   return `${n.toFixed(0)} ${currency}`;
 }
 
-async function loadDashboardData(userId: string, canReadAll: boolean) {
+const loadDashboardData = unstable_cache(
+  _loadDashboardData,
+  ['dashboard-data'],
+  { revalidate: 60, tags: ['dashboard'] }
+);
+
+async function _loadDashboardData(userId: string, canReadAll: boolean) {
   const ownerScope = canReadAll ? {} : { ownerId: userId };
 
   const [

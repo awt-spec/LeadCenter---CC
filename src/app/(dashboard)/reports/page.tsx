@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { can } from '@/lib/rbac';
@@ -36,7 +37,13 @@ function moneyFmt(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 
-async function loadReports(userId: string, canAll: boolean) {
+const loadReports = unstable_cache(
+  _loadReports,
+  ['reports-data'],
+  { revalidate: 120, tags: ['reports'] }
+);
+
+async function _loadReports(userId: string, canAll: boolean) {
   const scope = canAll ? {} : { ownerId: userId };
 
   const [allOpps, allAccounts] = await Promise.all([

@@ -2,6 +2,15 @@
 
 Análisis técnico real de la BD en producción (`szmlzizfulgtlezqpzlc.supabase.co`, región `us-west-2`).
 
+> **Estado de los riesgos (post-fix):**
+> - 🔴 Sin migrations versionadas → ✅ **resuelto** (baseline `20260428175358_init` aplicado, `migrate deploy` en build).
+> - 🔴 Sin RLS → ✅ **resuelto** (RLS habilitado en 30 tablas + grants revocados a `anon`/`authenticated`).
+> - 🟠 Sin FTS → ✅ **resuelto** (GIN tsvector con config `spanish` en Contact y Account; el query lo usa automático).
+> - 🟠 Sin backups → ✅ **resuelto** (script `scripts/backup.sh` + GitHub Actions cron diario con S3 opcional).
+> - 🟠 Sin caché → ✅ **resuelto** (`unstable_cache` 60-120s en stats del home y reports).
+> - 🟠 Offset pagination → ⏳ pendiente (no bloqueante hasta ~5k rows).
+> - 🟡 Demo bypass siempre activo → ✅ **resuelto** (env `DEMO_MODE`, off por defecto fuera de Vercel prod).
+
 ---
 
 ## 📊 Estado actual

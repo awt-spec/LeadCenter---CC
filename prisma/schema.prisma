@@ -172,6 +172,9 @@ model Account {
   tasks            Task[]
   customFields     CustomFieldValue[] @relation("AccountCustomFields")
 
+  /// Generated tsvector for full-text search. Maintained by Postgres.
+  search_vector    Unsupported("tsvector")?
+
   @@index([name])
   @@index([domain])
   @@index([ownerId])
@@ -267,6 +270,9 @@ model Contact {
   campaigns        CampaignContact[]
   tasks            Task[]
   customFields     CustomFieldValue[] @relation("ContactCustomFields")
+
+  /// Generated tsvector for full-text search. Maintained by Postgres.
+  search_vector    Unsupported("tsvector")?
 
   @@index([email])
   @@index([ownerId])

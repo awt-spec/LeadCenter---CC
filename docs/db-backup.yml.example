@@ -1,0 +1,38 @@
+name: Daily DB backup
+
+on:
+  schedule:
+    # 03:00 UTC daily ≈ 21:00 CST (Costa Rica) night-time, low-traffic.
+    - cron: '0 3 * * *'
+  workflow_dispatch:  # allow manual run
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pg_dump (matching server version)
+        run: |
+          sudo apt-get update -y
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt jammy-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          sudo apt-get update -y
+          sudo apt-get install -y postgresql-client-15
+
+      - name: Run backup
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_S3_PREFIX: ${{ secrets.BACKUP_S3_PREFIX }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+        run: bash scripts/backup.sh
+
+      - name: Upload as workflow artifact (90 day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: leadcenter-backup-${{ github.run_number }}
+          path: backups/*.sql.gz
+          retention-days: 90
