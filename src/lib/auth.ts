@@ -76,9 +76,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const { email, password } = parsed.data;
 
-        // Demo bypass — works without DB
+        // Demo bypass — prefer the real seeded user if present, fall back to
+        // a synthetic id so the button still works against a fresh DB.
         if (isDemoCredentials(email, password)) {
-          return { id: DEMO_USER_ID, email: DEMO_EMAIL, name: DEMO_NAME };
+          const real = await prisma.user
+            .findUnique({ where: { email: DEMO_EMAIL }, select: { id: true } })
+            .catch(() => null);
+          return {
+            id: real?.id ?? DEMO_USER_ID,
+            email: DEMO_EMAIL,
+            name: DEMO_NAME,
+          };
         }
 
         const user = await prisma.user.findUnique({ where: { email } });

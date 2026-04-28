@@ -77,7 +77,7 @@ export const contactFilterSchema = z.object({
   createdTo: z.string().optional(),
   importBatchId: z.string().optional(),
   page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(200).default(50),
+  pageSize: z.number().int().min(1).max(10000).default(50),
   sortBy: z.string().default('createdAt'),
   sortDir: z.enum(['asc', 'desc']).default('desc'),
 });
