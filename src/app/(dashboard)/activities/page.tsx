@@ -42,7 +42,7 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: S
     onlyMyMentions: sp.onlyMyMentions === 'true',
     includeSystem: sp.includeSystem === 'true',
     page: sp.page ? Number(sp.page) : 1,
-    pageSize: sp.pageSize ? Number(sp.pageSize) : 25,
+    pageSize: sp.pageSize ? Number(sp.pageSize) : 15,
   });
 
   const [{ rows: activities, total }, stats, users] = await Promise.all([

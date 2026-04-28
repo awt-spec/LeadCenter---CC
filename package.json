@@ -13,6 +13,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:demo": "tsx prisma/seed-demo.ts",
     "db:seed:campaigns": "tsx prisma/seed-campaigns.ts",
+    "db:seed:tasks-fields": "tsx prisma/seed-tasks-and-fields.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate"
   },

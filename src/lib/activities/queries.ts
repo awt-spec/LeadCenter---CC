@@ -20,7 +20,9 @@ export type ActivityWithRelations = Prisma.ActivityGetPayload<{
         mentionedUser: { select: { id: true; name: true; avatarUrl: true } };
       };
     };
-    attachments: true;
+    attachments: {
+      select: { id: true; fileName: true; fileUrl: true; fileSize: true; mimeType: true };
+    };
     nextActionAssignee: { select: { id: true; name: true; avatarUrl: true } };
     assignees: {
       include: {
@@ -45,7 +47,9 @@ const INCLUDE = {
       mentionedUser: { select: { id: true, name: true, avatarUrl: true } },
     },
   },
-  attachments: true,
+  attachments: {
+    select: { id: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true },
+  },
   nextActionAssignee: { select: { id: true, name: true, avatarUrl: true } },
   assignees: {
     include: {
