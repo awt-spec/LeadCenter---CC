@@ -35,7 +35,15 @@ import {
 } from '@/lib/shared/labels';
 import { getInitials } from '@/lib/utils';
 
-export default async function AccountDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AccountDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ closed?: string }>;
+}) {
+  const _sp = await searchParams;
+  const includeClosed = _sp.closed === '1' || _sp.closed === 'true';
   const { id } = await params;
   const session = await auth();
   if (!session?.user?.id) return null;
@@ -223,7 +231,11 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
 
         <TabsContent value="tasks">
           <Suspense fallback={<TasksTabSkeleton />}>
-            <TasksTabAsync accountId={account.id} canEdit={canEdit} />
+            <TasksTabAsync
+              accountId={account.id}
+              canEdit={canEdit}
+              includeClosed={includeClosed}
+            />
           </Suspense>
         </TabsContent>
 

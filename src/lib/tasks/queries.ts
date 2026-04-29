@@ -13,10 +13,21 @@ export type TaskWithRelations = Prisma.TaskGetPayload<{
   };
 }>;
 
-export const listTasksByAccount = unstable_cache(
-  async (accountId: string): Promise<TaskWithRelations[]> =>
-    prisma.task.findMany({
-      where: { accountId, parentTaskId: null },
+// Active = not DONE / CANCELLED. By default we only return active tasks
+// because closed lists grow indefinitely (3k+ rows per account is common
+// after a CSV import). The Kanban toggles `includeClosed` when the user
+// wants to see history.
+const STATUS_CLOSED = ['DONE', 'CANCELLED'] as const;
+
+const listTasksByAccountRaw = unstable_cache(
+  async (accountId: string, includeClosed: boolean): Promise<TaskWithRelations[]> => {
+    const where: Prisma.TaskWhereInput = {
+      accountId,
+      parentTaskId: null,
+      ...(includeClosed ? {} : { status: { notIn: [...STATUS_CLOSED] } }),
+    };
+    return prisma.task.findMany({
+      where,
       include: {
         createdBy: { select: { id: true, name: true, avatarUrl: true } },
         assignees: {
@@ -28,11 +39,22 @@ export const listTasksByAccount = unstable_cache(
         contact: { select: { id: true, fullName: true, avatarUrl: true } },
         opportunity: { select: { id: true, name: true, code: true } },
       },
-      orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
-    }),
+      orderBy: includeClosed
+        ? [{ status: 'asc' }, { completedAt: 'desc' }, { position: 'asc' }]
+        : [{ position: 'asc' }, { createdAt: 'asc' }],
+      take: includeClosed ? 500 : 200, // cap for perf
+    });
+  },
   ['tasks-by-account'],
   { revalidate: 60, tags: ['tasks'] }
 );
+
+export async function listTasksByAccount(
+  accountId: string,
+  opts: { includeClosed?: boolean } = {}
+): Promise<TaskWithRelations[]> {
+  return listTasksByAccountRaw(accountId, opts.includeClosed ?? false);
+}
 
 export async function getTaskById(id: string) {
   return prisma.task.findUnique({

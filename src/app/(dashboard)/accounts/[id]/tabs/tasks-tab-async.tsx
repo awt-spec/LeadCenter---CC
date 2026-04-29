@@ -1,20 +1,35 @@
-import type { Session } from 'next-auth';
 import { listTasksByAccount } from '@/lib/tasks/queries';
 import { getUsersLite } from '@/lib/shared/lite-lists';
+import { prisma } from '@/lib/db';
 import { TaskKanban } from '../tasks/task-kanban';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export async function TasksTabAsync({
   accountId,
   canEdit,
+  includeClosed,
 }: {
   accountId: string;
   canEdit: boolean;
+  includeClosed: boolean;
 }) {
-  const [tasks, users] = await Promise.all([
-    listTasksByAccount(accountId),
+  const [tasks, users, totals] = await Promise.all([
+    listTasksByAccount(accountId, { includeClosed }),
     getUsersLite(),
+    prisma.task.groupBy({
+      by: ['status'],
+      where: { accountId, parentTaskId: null },
+      _count: { _all: true },
+    }),
   ]);
+
+  const counts = totals.reduce<Record<string, number>>((acc, r) => {
+    acc[r.status] = r._count._all;
+    return acc;
+  }, {});
+  const closedTotal = (counts.DONE ?? 0) + (counts.CANCELLED ?? 0);
+  const openTotal = Object.values(counts).reduce((a, b) => a + b, 0) - closedTotal;
+
   return (
     <TaskKanban
       accountId={accountId}
@@ -26,6 +41,9 @@ export async function TasksTabAsync({
         avatarUrl: u.avatarUrl,
       }))}
       canEdit={canEdit}
+      includeClosed={includeClosed}
+      openCount={openTotal}
+      closedCount={closedTotal}
     />
   );
 }

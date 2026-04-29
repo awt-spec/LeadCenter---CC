@@ -14,6 +14,7 @@
     "db:seed:demo": "tsx prisma/seed-demo.ts",
     "db:seed:campaigns": "tsx prisma/seed-campaigns.ts",
     "db:seed:tasks-fields": "tsx prisma/seed-tasks-and-fields.ts",
+    "db:import:tasks-csv": "tsx prisma/import-tasks-csv.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate"
   },

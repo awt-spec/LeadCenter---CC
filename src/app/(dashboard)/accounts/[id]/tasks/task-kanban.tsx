@@ -26,7 +26,9 @@ import {
 import type { TaskStatus } from '@/lib/tasks/schemas';
 import type { TaskWithRelations } from '@/lib/tasks/queries';
 import { cn } from '@/lib/utils';
-import { Plus } from 'lucide-react';
+import { Plus, Eye, EyeOff } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 
 type UserOption = { id: string; name: string; avatarUrl?: string | null; email?: string };
 
@@ -35,11 +37,17 @@ export function TaskKanban({
   initialTasks,
   users,
   canEdit,
+  includeClosed = false,
+  openCount,
+  closedCount,
 }: {
   accountId: string;
   initialTasks: TaskWithRelations[];
   users: UserOption[];
   canEdit: boolean;
+  includeClosed?: boolean;
+  openCount?: number;
+  closedCount?: number;
 }) {
   const router = useRouter();
   const [tasks, setTasks] = useState(initialTasks);
@@ -93,18 +101,24 @@ export function TaskKanban({
 
   return (
     <>
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3 text-xs text-sysde-mid">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3 text-xs text-sysde-mid">
           <span>
-            <strong className="text-sysde-gray">{tasks.length}</strong> tareas
+            <strong className="text-sysde-gray">{openCount ?? tasks.length}</strong> activas
           </span>
-          <span>·</span>
-          <span>
-            <strong className="text-sysde-gray">{tasks.filter((t) => t.status === 'DONE').length}</strong>{' '}
-            completadas
-          </span>
+          {(closedCount ?? 0) > 0 && (
+            <>
+              <span>·</span>
+              <span>
+                <strong className="text-sysde-gray">{closedCount}</strong> cerradas
+              </span>
+            </>
+          )}
         </div>
-        {canEdit && <TaskCreateDialog accountId={accountId} users={users} />}
+        <div className="flex items-center gap-2">
+          <ClosedFilterToggle includeClosed={includeClosed} closedCount={closedCount ?? 0} />
+          {canEdit && <TaskCreateDialog accountId={accountId} users={users} />}
+        </div>
       </div>
 
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
@@ -200,5 +214,41 @@ function KanbanColumn({
         )}
       </div>
     </div>
+  );
+}
+
+function ClosedFilterToggle({
+  includeClosed,
+  closedCount,
+}: {
+  includeClosed?: boolean;
+  closedCount: number;
+}) {
+  const sp = useSearchParams();
+  // Build URL preserving other params
+  const next = new URLSearchParams(sp.toString());
+  if (includeClosed) next.delete('closed');
+  else next.set('closed', '1');
+  const Icon = includeClosed ? EyeOff : Eye;
+  const label = includeClosed
+    ? 'Solo activas'
+    : closedCount > 0
+    ? `Mostrar cerradas (${closedCount})`
+    : 'Mostrar cerradas';
+
+  return (
+    <Link
+      href={`?${next.toString()}#tasks`}
+      scroll={false}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors',
+        includeClosed
+          ? 'border-sysde-red bg-sysde-red text-white hover:bg-sysde-red-dark'
+          : 'border-sysde-border bg-white text-sysde-gray hover:bg-sysde-bg'
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </Link>
   );
 }
