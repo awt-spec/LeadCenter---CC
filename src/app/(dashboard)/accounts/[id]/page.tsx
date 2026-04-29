@@ -18,6 +18,7 @@ import { getAccountById } from '@/lib/accounts/queries';
 import { deleteAccount } from '@/lib/accounts/mutations';
 import { TasksTabAsync, TasksTabSkeleton } from './tabs/tasks-tab-async';
 import { ActivityTabAsync, ActivityTabSkeleton } from './tabs/activity-tab-async';
+import { CustomFieldsCard } from '@/components/custom-fields/custom-fields-card';
 
 // Aggressive page-level caching. Hits inside the window are served
 // from Next's data cache without touching Prisma/Supabase. Mutations
@@ -227,6 +228,8 @@ export default async function AccountDetailPage({
               </CardContent>
             </Card>
           )}
+
+          <CustomFieldsCard entity="ACCOUNT" recordId={account.id} />
         </TabsContent>
 
         <TabsContent value="tasks">

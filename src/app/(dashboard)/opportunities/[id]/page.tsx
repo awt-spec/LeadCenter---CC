@@ -35,6 +35,7 @@ import { StageProgress } from '../components/stage-progress';
 import { ContactRolesManager } from '../components/contact-roles-manager';
 import { DetailActions } from '../components/detail-actions';
 import { getInitials } from '@/lib/utils';
+import { CustomFieldsCard } from '@/components/custom-fields/custom-fields-card';
 
 // Cache the whole page for 60s. Mutations call revalidatePath.
 export const revalidate = 60;
@@ -198,6 +199,8 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                   ) : <p className="text-sm text-sysde-mid">Sin descripción.</p>}
                 </CardContent>
               </Card>
+
+              <CustomFieldsCard entity="OPPORTUNITY" recordId={opp.id} />
 
               <Card>
                 <CardHeader><CardTitle>Dimensionamiento</CardTitle></CardHeader>

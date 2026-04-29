@@ -37,6 +37,7 @@ import { activityFilterSchema } from '@/lib/activities/schemas';
 import { TimelineWithComposer } from '@/components/activities/timeline-with-composer';
 import { DeleteResourceButton } from '@/components/shared/delete-resource-button';
 import { deleteContact } from '@/lib/contacts/mutations';
+import { CustomFieldsCard } from '@/components/custom-fields/custom-fields-card';
 import {
   CONTACT_STATUS_LABELS,
   CONTACT_STATUS_VARIANTS,
@@ -230,6 +231,8 @@ export default async function ContactDetailPage({
                   )}
                 </CardContent>
               </Card>
+
+              <CustomFieldsCard entity="CONTACT" recordId={contact.id} />
             </TabsContent>
 
             <TabsContent value="activity">
