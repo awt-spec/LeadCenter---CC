@@ -23,8 +23,13 @@ import { prisma } from '@/lib/db';
 import {
   getContactById,
   getContactAuditLog,
-  listUsers,
 } from '@/lib/contacts/queries';
+import {
+  getContactsLite,
+  getAccountsLite,
+  getOpportunitiesLite,
+  getUsersLite,
+} from '@/lib/shared/lite-lists';
 import { listActivities } from '@/lib/activities/queries';
 import { activityFilterSchema } from '@/lib/activities/schemas';
 import { TimelineWithComposer } from '@/components/activities/timeline-with-composer';
@@ -63,10 +68,10 @@ export default async function ContactDetailPage({
   const [{ rows: activities }, allContactsLite, allAccountsLite, allOppsLite, usersLite] =
     await Promise.all([
       listActivities(session, { contactId: id }, activityFilters),
-      prisma.contact.findMany({ select: { id: true, fullName: true }, orderBy: { fullName: 'asc' }, take: 200 }),
-      prisma.account.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 200 }),
-      prisma.opportunity.findMany({ select: { id: true, name: true, code: true }, orderBy: { createdAt: 'desc' }, take: 200 }),
-      listUsers(),
+      getContactsLite(),
+      getAccountsLite(),
+      getOpportunitiesLite(),
+      getUsersLite(),
     ]);
   const composerContacts = allContactsLite.map((c) => ({ id: c.id, label: c.fullName }));
   const composerAccounts = allAccountsLite.map((a) => ({ id: a.id, label: a.name }));

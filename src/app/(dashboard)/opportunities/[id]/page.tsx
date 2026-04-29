@@ -17,7 +17,7 @@ import {
 } from '@/lib/opportunities/queries';
 import { listActivities, getLatestPendingNextAction } from '@/lib/activities/queries';
 import { activityFilterSchema } from '@/lib/activities/schemas';
-import { listUsers } from '@/lib/contacts/queries';
+import { getAccountsLite, getOpportunitiesLite, getUsersLite } from '@/lib/shared/lite-lists';
 import { TimelineWithComposer } from '@/components/activities/timeline-with-composer';
 import { NextActionCard } from '@/components/activities/next-action-card';
 import {
@@ -64,9 +64,9 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     await Promise.all([
       listActivities(session, { opportunityId: id }, activityFilters),
       getLatestPendingNextAction(id),
-      prisma.account.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 200 }),
-      prisma.opportunity.findMany({ select: { id: true, name: true, code: true }, orderBy: { createdAt: 'desc' }, take: 200 }),
-      listUsers(),
+      getAccountsLite(),
+      getOpportunitiesLite(),
+      getUsersLite(),
     ]);
   const composerContacts = allContacts.map((c) => ({ id: c.id, label: c.fullName }));
   const composerAccounts = allAccountsLite.map((a) => ({ id: a.id, label: a.name }));

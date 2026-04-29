@@ -23,6 +23,12 @@ import { deleteAccount } from '@/lib/accounts/mutations';
 import { listTasksByAccount, getTaskStats } from '@/lib/tasks/queries';
 import { TaskKanban } from './tasks/task-kanban';
 import {
+  getContactsLite,
+  getAccountsLite,
+  getOpportunitiesLite,
+  getUsersLite,
+} from '@/lib/shared/lite-lists';
+import {
   ACCOUNT_STATUS_LABELS,
   ACCOUNT_STATUS_VARIANTS,
   COMPANY_SIZE_LABELS,
@@ -62,10 +68,10 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
     tasks,
   ] = await Promise.all([
     listActivities(session, { accountId: id }, activityFilters),
-    prisma.contact.findMany({ select: { id: true, fullName: true }, orderBy: { fullName: 'asc' }, take: 200 }),
-    prisma.account.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 200 }),
-    prisma.opportunity.findMany({ select: { id: true, name: true, code: true }, orderBy: { createdAt: 'desc' }, take: 200 }),
-    listUsers(),
+    getContactsLite(),
+    getAccountsLite(),
+    getOpportunitiesLite(),
+    getUsersLite(),
     listTasksByAccount(id),
   ]);
   const composerContacts = allContactsLite.map((c) => ({ id: c.id, label: c.fullName }));
