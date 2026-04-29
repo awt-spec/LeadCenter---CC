@@ -90,16 +90,43 @@ function mapSolutionToProduct(sol: string): 'SAF_PLUS' | 'FILEMASTER' | 'FACTORA
   return 'CUSTOM';
 }
 
-function mapStage(completedAt: Date | null, section: string): 'LEAD' | 'DISCOVERY' | 'SIZING' | 'DEMO' | 'PROPOSAL' | 'NEGOTIATION' | 'CLOSING' | 'WON' {
-  if (completedAt) return 'WON';
+type Stage =
+  | 'LEAD'
+  | 'DISCOVERY'
+  | 'SIZING'
+  | 'DEMO'
+  | 'PROPOSAL'
+  | 'NEGOTIATION'
+  | 'CLOSING'
+  | 'HANDOFF'
+  | 'WON'
+  | 'LOST'
+  | 'STAND_BY'
+  | 'NURTURE';
+type Status = 'OPEN' | 'WON' | 'LOST' | 'STAND_BY' | 'NURTURE';
+
+function mapStageStatus(completedAt: Date | null, section: string): { stage: Stage; status: Status } {
   const s = (section || '').toLowerCase();
-  if (s.includes('discovery') || s.includes('descubri')) return 'DISCOVERY';
-  if (s.includes('demo')) return 'DEMO';
-  if (s.includes('propuesta') || s.includes('proposal')) return 'PROPOSAL';
-  if (s.includes('negocia') || s.includes('negotia')) return 'NEGOTIATION';
-  if (s.includes('cierre') || s.includes('clos')) return 'CLOSING';
-  if (s.includes('sizing')) return 'SIZING';
-  return 'LEAD';
+
+  // Active in source (no Completed At): OPEN, stage inferred from section.
+  if (!completedAt) {
+    if (s.includes('madura') || s.includes('nurture') || s.includes('stand') || s.includes('pausa'))
+      return { stage: 'STAND_BY', status: 'STAND_BY' };
+    if (s.includes('discovery') || s.includes('descubri')) return { stage: 'DISCOVERY', status: 'OPEN' };
+    if (s.includes('demo')) return { stage: 'DEMO', status: 'OPEN' };
+    if (s.includes('propuesta') || s.includes('proposal')) return { stage: 'PROPOSAL', status: 'OPEN' };
+    if (s.includes('negocia') || s.includes('negotia')) return { stage: 'NEGOTIATION', status: 'OPEN' };
+    if (s.includes('cierre') || s.includes('clos')) return { stage: 'CLOSING', status: 'OPEN' };
+    if (s.includes('sizing')) return { stage: 'SIZING', status: 'OPEN' };
+    return { stage: 'LEAD', status: 'OPEN' };
+  }
+
+  // Completed in source → NOT active. Default to STAND_BY (en maduración) unless
+  // the section explicitly says won / lost. We don't actually know the outcome,
+  // so STAND_BY is safer than asserting WON.
+  if (s.includes('ganad') || s.includes('won')) return { stage: 'WON', status: 'WON' };
+  if (s.includes('perdid') || s.includes('lost')) return { stage: 'LOST', status: 'LOST' };
+  return { stage: 'STAND_BY', status: 'STAND_BY' };
 }
 
 function parseRating(prio: string): 'A_PLUS' | 'A' | 'B_PLUS' | 'B' | 'C' | 'D' | 'UNSCORED' {
@@ -208,8 +235,7 @@ async function main() {
         }
 
         const completedAt = parseDate(row['Completed At']);
-        const stage = mapStage(completedAt, row['Section/Column']);
-        const status = stage === 'WON' ? 'WON' : 'OPEN';
+        const { stage, status } = mapStageStatus(completedAt, row['Section/Column']);
         const product = mapSolutionToProduct(row['Solución Sysde']);
         const rating = parseRating(row['Prioridad y Acción requerida | LC']);
         const assigneeEmail = row['Assignee Email']?.trim().toLowerCase();
@@ -258,7 +284,17 @@ async function main() {
               status,
               rating,
               probability:
-                stage === 'WON' ? 100 : stage === 'LEAD' ? 5 : stage === 'DISCOVERY' ? 15 : 25,
+                stage === 'WON'
+                  ? 100
+                  : stage === 'LOST'
+                  ? 0
+                  : stage === 'STAND_BY' || stage === 'NURTURE'
+                  ? 10
+                  : stage === 'LEAD'
+                  ? 5
+                  : stage === 'DISCOVERY'
+                  ? 15
+                  : 25,
               estimatedValue: monto,
               currency: 'USD',
               expectedCloseDate: parseDate(row['Due Date']),

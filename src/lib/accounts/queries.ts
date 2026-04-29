@@ -119,12 +119,14 @@ const getAccountByIdRaw = unstable_cache(
             tags: { include: { tag: true } },
           },
           orderBy: { createdAt: 'desc' },
+          take: 100,
         },
         opportunities: {
           include: {
             owner: { select: { id: true, name: true, avatarUrl: true } },
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+          take: 50,
         },
         _count: { select: { contacts: true, opportunities: true } },
       },
