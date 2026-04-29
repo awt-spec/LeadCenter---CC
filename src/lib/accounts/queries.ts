@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import type { Session } from 'next-auth';
+import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/db';
 import { can } from '@/lib/rbac';
 import type { AccountFilters } from './schemas';
@@ -73,30 +74,40 @@ export async function listAccounts(session: Session, filters: AccountFilters) {
   return { rows, total };
 }
 
+// Raw lookup cached per-id. Session-dependent RBAC check stays out of
+// the cache key (applied at the call site below).
+const getAccountByIdRaw = unstable_cache(
+  async (id: string) => {
+    return prisma.account.findUnique({
+      where: { id },
+      include: {
+        owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        createdBy: { select: { id: true, name: true } },
+        parentAccount: { select: { id: true, name: true } },
+        childAccounts: { select: { id: true, name: true, status: true } },
+        contacts: {
+          include: {
+            owner: { select: { id: true, name: true, avatarUrl: true } },
+            tags: { include: { tag: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+        opportunities: {
+          include: {
+            owner: { select: { id: true, name: true, avatarUrl: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+        _count: { select: { contacts: true, opportunities: true } },
+      },
+    });
+  },
+  ['account-detail'],
+  { revalidate: 60, tags: ['accounts'] }
+);
+
 export async function getAccountById(session: Session, id: string) {
-  const account = await prisma.account.findUnique({
-    where: { id },
-    include: {
-      owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
-      createdBy: { select: { id: true, name: true } },
-      parentAccount: { select: { id: true, name: true } },
-      childAccounts: { select: { id: true, name: true, status: true } },
-      contacts: {
-        include: {
-          owner: { select: { id: true, name: true, avatarUrl: true } },
-          tags: { include: { tag: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-      },
-      opportunities: {
-        include: {
-          owner: { select: { id: true, name: true, avatarUrl: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-      },
-      _count: { select: { contacts: true, opportunities: true } },
-    },
-  });
+  const account = await getAccountByIdRaw(id);
   if (!account) return null;
 
   if (!can(session, 'accounts:read:all')) {

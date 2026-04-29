@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
@@ -96,6 +96,7 @@ export async function createAccount(input: AccountFormValues): Promise<ActionRes
   });
 
   revalidatePath('/accounts');
+  revalidateTag('accounts');
   return { ok: true, data: { id: acc.id } };
 }
 
@@ -149,6 +150,7 @@ export async function updateAccount(
 
   revalidatePath('/accounts');
   revalidatePath(`/accounts/${id}`);
+  revalidateTag('accounts');
   return { ok: true, data: { id } };
 }
 
@@ -169,6 +171,7 @@ export async function deleteAccount(id: string): Promise<ActionResult> {
   });
 
   revalidatePath('/accounts');
+  revalidateTag('accounts');
   return { ok: true, data: undefined };
 }
 
@@ -205,6 +208,7 @@ export async function setAccountPriority(
 
   revalidatePath('/accounts');
   revalidatePath(`/accounts/${accountId}`);
+  revalidateTag('accounts');
   return { ok: true, data: undefined };
 }
 
@@ -241,6 +245,7 @@ export async function setAccountStatus(
 
   revalidatePath('/accounts');
   revalidatePath(`/accounts/${accountId}`);
+  revalidateTag('accounts');
   return { ok: true, data: undefined };
 }
 
@@ -266,5 +271,6 @@ export async function linkContactToAccount(
   });
 
   revalidatePath(`/accounts/${accountId}`);
+  revalidateTag('accounts');
   return { ok: true, data: undefined };
 }

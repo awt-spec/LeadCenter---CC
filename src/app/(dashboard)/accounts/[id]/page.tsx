@@ -28,6 +28,11 @@ import {
   getOpportunitiesLite,
   getUsersLite,
 } from '@/lib/shared/lite-lists';
+
+// Aggressive page-level caching. Hits inside the window are served
+// from Next's data cache without touching Prisma/Supabase. Mutations
+// that touch this account call revalidatePath('/accounts/<id>').
+export const revalidate = 60;
 import {
   ACCOUNT_STATUS_LABELS,
   ACCOUNT_STATUS_VARIANTS,

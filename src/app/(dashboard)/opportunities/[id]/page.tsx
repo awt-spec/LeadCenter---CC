@@ -36,6 +36,9 @@ import { ContactRolesManager } from '../components/contact-roles-manager';
 import { DetailActions } from '../components/detail-actions';
 import { getInitials } from '@/lib/utils';
 
+// Cache the whole page for 60s. Mutations call revalidatePath.
+export const revalidate = 60;
+
 export default async function OpportunityDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();

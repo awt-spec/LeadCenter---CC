@@ -1,5 +1,6 @@
 import 'server-only';
 import type { Prisma } from '@prisma/client';
+import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/db';
 
 export type TaskWithRelations = Prisma.TaskGetPayload<{
@@ -12,23 +13,26 @@ export type TaskWithRelations = Prisma.TaskGetPayload<{
   };
 }>;
 
-export async function listTasksByAccount(accountId: string): Promise<TaskWithRelations[]> {
-  return prisma.task.findMany({
-    where: { accountId, parentTaskId: null },
-    include: {
-      createdBy: { select: { id: true, name: true, avatarUrl: true } },
-      assignees: {
-        include: {
-          user: { select: { id: true, name: true, avatarUrl: true, email: true } },
+export const listTasksByAccount = unstable_cache(
+  async (accountId: string): Promise<TaskWithRelations[]> =>
+    prisma.task.findMany({
+      where: { accountId, parentTaskId: null },
+      include: {
+        createdBy: { select: { id: true, name: true, avatarUrl: true } },
+        assignees: {
+          include: {
+            user: { select: { id: true, name: true, avatarUrl: true, email: true } },
+          },
         },
+        _count: { select: { subtasks: true, comments: true, attachments: true } },
+        contact: { select: { id: true, fullName: true, avatarUrl: true } },
+        opportunity: { select: { id: true, name: true, code: true } },
       },
-      _count: { select: { subtasks: true, comments: true, attachments: true } },
-      contact: { select: { id: true, fullName: true, avatarUrl: true } },
-      opportunity: { select: { id: true, name: true, code: true } },
-    },
-    orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
-  });
-}
+      orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+    }),
+  ['tasks-by-account'],
+  { revalidate: 60, tags: ['tasks'] }
+);
 
 export async function getTaskById(id: string) {
   return prisma.task.findUnique({

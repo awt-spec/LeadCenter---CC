@@ -45,6 +45,9 @@ import {
 } from '@/lib/constants';
 import { getInitials } from '@/lib/utils';
 
+// Cache the whole page for 60s. Mutations call revalidatePath.
+export const revalidate = 60;
+
 export default async function ContactDetailPage({
   params,
 }: {

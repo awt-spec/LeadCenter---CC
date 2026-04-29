@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
@@ -126,6 +126,7 @@ export async function updateTask(id: string, input: Partial<TaskFormValues>): Pr
   await audit(session.user.id, 'update', id, input);
   if (before?.accountId) revalidatePath(`/accounts/${before.accountId}`);
   if (before?.opportunityId) revalidatePath(`/opportunities/${before.opportunityId}`);
+  revalidateTag('tasks');
   return { ok: true, data: undefined };
 }
 
