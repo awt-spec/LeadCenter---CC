@@ -74,6 +74,34 @@ export async function listAccounts(session: Session, filters: AccountFilters) {
   return { rows, total };
 }
 
+// Minimal lookup for the page header — paints instantly while the
+// heavy queries below stream in via Suspense.
+export const getAccountMinimal = unstable_cache(
+  async (id: string) =>
+    prisma.account.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        legalName: true,
+        domain: true,
+        website: true,
+        status: true,
+        priority: true,
+        country: true,
+        city: true,
+        segment: true,
+        size: true,
+        ownerId: true,
+        owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        parentAccount: { select: { id: true, name: true } },
+        _count: { select: { contacts: true, opportunities: true } },
+      },
+    }),
+  ['account-minimal'],
+  { revalidate: 60, tags: ['accounts'] }
+);
+
 // Raw lookup cached per-id. Session-dependent RBAC check stays out of
 // the cache key (applied at the call site below).
 const getAccountByIdRaw = unstable_cache(

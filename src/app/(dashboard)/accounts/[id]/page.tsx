@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { format } from 'date-fns';
@@ -5,11 +6,6 @@ import { es } from 'date-fns/locale';
 import { ChevronLeft, Pencil, Plus, Globe, MapPin, Briefcase, Users } from 'lucide-react';
 import { auth } from '@/lib/auth';
 import { can } from '@/lib/rbac';
-import { prisma } from '@/lib/db';
-import { listActivities } from '@/lib/activities/queries';
-import { activityFilterSchema } from '@/lib/activities/schemas';
-import { listUsers } from '@/lib/contacts/queries';
-import { TimelineWithComposer } from '@/components/activities/timeline-with-composer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -20,14 +16,8 @@ import { ClickableRow } from './clickable-row';
 import { DeleteResourceButton } from '@/components/shared/delete-resource-button';
 import { getAccountById } from '@/lib/accounts/queries';
 import { deleteAccount } from '@/lib/accounts/mutations';
-import { listTasksByAccount, getTaskStats } from '@/lib/tasks/queries';
-import { TaskKanban } from './tasks/task-kanban';
-import {
-  getContactsLite,
-  getAccountsLite,
-  getOpportunitiesLite,
-  getUsersLite,
-} from '@/lib/shared/lite-lists';
+import { TasksTabAsync, TasksTabSkeleton } from './tabs/tasks-tab-async';
+import { ActivityTabAsync, ActivityTabSkeleton } from './tabs/activity-tab-async';
 
 // Aggressive page-level caching. Hits inside the window are served
 // from Next's data cache without touching Prisma/Supabase. Mutations
@@ -63,25 +53,10 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   const won = closed.filter((o) => o.status === 'WON').length;
   const winRate = closed.length > 0 ? Math.round((won / closed.length) * 100) : 0;
 
-  const activityFilters = activityFilterSchema.parse({});
-  const [
-    { rows: activities },
-    allContactsLite,
-    allAccountsLite,
-    allOppsLite,
-    usersLite,
-    tasks,
-  ] = await Promise.all([
-    listActivities(session, { accountId: id }, activityFilters),
-    getContactsLite(),
-    getAccountsLite(),
-    getOpportunitiesLite(),
-    getUsersLite(),
-    listTasksByAccount(id),
-  ]);
-  const composerContacts = allContactsLite.map((c) => ({ id: c.id, label: c.fullName }));
-  const composerAccounts = allAccountsLite.map((a) => ({ id: a.id, label: a.name }));
-  const composerOpps = allOppsLite.map((o) => ({ id: o.id, label: `${o.code ?? o.id} · ${o.name}` }));
+  // Tasks count for the tab badge — fast count() instead of full join
+  const tasksCount = await import('@/lib/db').then(({ prisma }) =>
+    prisma.task.count({ where: { accountId: id, parentTaskId: null } })
+  );
 
   return (
     <div>
@@ -199,7 +174,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
       <Tabs defaultValue="overview" className="mt-6">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="tasks">Tareas {tasks.length > 0 && `(${tasks.length})`}</TabsTrigger>
+          <TabsTrigger value="tasks">Tareas {tasksCount > 0 && `(${tasksCount})`}</TabsTrigger>
           <TabsTrigger value="activity">Actividad</TabsTrigger>
           <TabsTrigger value="contacts">Contactos</TabsTrigger>
           <TabsTrigger value="opps">Oportunidades</TabsTrigger>
@@ -247,25 +222,15 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
         </TabsContent>
 
         <TabsContent value="tasks">
-          <TaskKanban
-            accountId={account.id}
-            initialTasks={tasks}
-            users={usersLite.map((u) => ({ id: u.id, name: u.name, email: u.email, avatarUrl: u.avatarUrl }))}
-            canEdit={canEdit}
-          />
+          <Suspense fallback={<TasksTabSkeleton />}>
+            <TasksTabAsync accountId={account.id} canEdit={canEdit} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="activity">
-          <TimelineWithComposer
-            activities={activities}
-            currentUserId={session.user.id}
-            composerDefaults={{ accountId: account.id }}
-            contacts={composerContacts}
-            accounts={composerAccounts}
-            opportunities={composerOpps}
-            users={usersLite.map((u) => ({ id: u.id, name: u.name }))}
-            canCreate={can(session, 'activities:create')}
-          />
+          <Suspense fallback={<ActivityTabSkeleton />}>
+            <ActivityTabAsync accountId={account.id} session={session} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="contacts">
