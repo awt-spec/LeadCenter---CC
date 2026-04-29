@@ -9,7 +9,12 @@ import { OpportunityForm } from '../components/opportunity-form';
 
 export const metadata = { title: 'Nueva oportunidad' };
 
-type SearchParams = Promise<{ accountId?: string }>;
+type SearchParams = Promise<{
+  accountId?: string;
+  contactId?: string;
+  campaignId?: string;
+  stage?: string;
+}>;
 
 export default async function NewOpportunityPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
@@ -18,6 +23,16 @@ export default async function NewOpportunityPage({ searchParams }: { searchParam
 
   if (!can(session, 'opportunities:create')) {
     return <Forbidden message="No tienes permiso para crear oportunidades." />;
+  }
+
+  // If contactId came in but no accountId, infer accountId from the contact
+  let accountId = sp.accountId;
+  if (!accountId && sp.contactId) {
+    const c = await prisma.contact.findUnique({
+      where: { id: sp.contactId },
+      select: { accountId: true },
+    });
+    accountId = c?.accountId ?? undefined;
   }
 
   const [users, accounts, contacts] = await Promise.all([
@@ -49,7 +64,8 @@ export default async function NewOpportunityPage({ searchParams }: { searchParam
           contacts={contacts}
           defaults={{
             ownerId: session.user.id,
-            accountId: sp.accountId,
+            accountId,
+            stage: (sp.stage as 'LEAD' | 'DISCOVERY' | 'SIZING' | 'DEMO' | 'PROPOSAL' | 'NEGOTIATION' | 'CLOSING' | 'HANDOFF' | undefined) ?? 'LEAD',
           }}
         />
       </div>

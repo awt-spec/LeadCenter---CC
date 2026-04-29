@@ -1,9 +1,11 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Search } from 'lucide-react';
 import type { Notification } from '@prisma/client';
 import { NotificationBell } from '@/components/notifications/notification-bell';
+import { CommandPalette } from './command-palette';
 
 const TITLES: Record<string, string> = {
   '/': 'Home',
@@ -45,19 +47,41 @@ export function Topbar({ notifications, unreadCount }: Props) {
       </h1>
 
       <div className="flex items-center gap-3">
-        <div className="relative hidden md:block">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sysde-mid" />
-          <input
-            type="search"
-            placeholder="Buscar…"
-            className="h-9 w-64 rounded-lg border border-sysde-border bg-sysde-bg pl-9 pr-3 text-sm text-sysde-gray placeholder:text-sysde-mid focus:outline-none focus:ring-2 focus:ring-sysde-red focus:ring-offset-1"
-          />
-        </div>
+        <SearchTrigger />
         <NotificationBell
           initialNotifications={notifications}
           initialUnread={unreadCount}
         />
       </div>
+      <CommandPalette />
     </header>
+  );
+}
+
+function SearchTrigger() {
+  const [isMac, setIsMac] = useState(false);
+
+  useEffect(() => {
+    setIsMac(navigator.platform.toLowerCase().includes('mac'));
+  }, []);
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        // Send a synthetic Cmd+K to toggle the palette (it listens globally)
+        const ev = new KeyboardEvent('keydown', { key: 'k', metaKey: true, ctrlKey: !isMac });
+        document.dispatchEvent(ev);
+      }}
+      className="hidden md:flex h-9 w-64 items-center justify-between rounded-lg border border-sysde-border bg-sysde-bg px-3 text-left text-sm text-sysde-mid transition-colors hover:bg-white"
+    >
+      <span className="flex items-center gap-2">
+        <Search className="h-4 w-4" />
+        Buscar…
+      </span>
+      <kbd className="hidden rounded border border-sysde-border bg-white px-1.5 py-0.5 text-[10px] font-medium text-sysde-mid lg:inline">
+        {isMac ? '⌘K' : 'Ctrl+K'}
+      </kbd>
+    </button>
   );
 }

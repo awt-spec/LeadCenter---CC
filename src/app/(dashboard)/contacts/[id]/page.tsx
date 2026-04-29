@@ -11,6 +11,8 @@ import {
   Globe,
   MapPin,
   Building2,
+  Briefcase,
+  Plus,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -118,7 +120,17 @@ export default async function ContactDetailPage({
             </div>
           </div>
           {canEdit && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Button asChild variant="outline">
+                <Link
+                  href={`/opportunities/new?contactId=${contact.id}${
+                    contact.accountId ? `&accountId=${contact.accountId}` : ''
+                  }`}
+                >
+                  <Briefcase className="mr-2 h-4 w-4" />
+                  Nueva oportunidad
+                </Link>
+              </Button>
               <Button asChild>
                 <Link href={`/contacts/${contact.id}/edit`}>
                   <Pencil className="mr-2 h-4 w-4" />
