@@ -1039,7 +1039,14 @@ model Task {
   comments     TaskComment[]
   attachments  TaskAttachment[]
 
+  /// Tasks that must complete before this one (this task is blocked).
+  blockedBy    TaskDependency[] @relation("TaskBlockedBy")
+  /// Tasks that this one is blocking.
+  blocking     TaskDependency[] @relation("TaskBlocking")
+
   tags         String[]       @default([])
+  /// Optional accent color (hex) for visual grouping in views.
+  color        String?
 
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
@@ -1110,4 +1117,16 @@ model TaskAttachment {
   uploadedBy User     @relation("TaskUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
 
   @@index([taskId])
+}
+
+model TaskDependency {
+  taskId          String
+  blockedByTaskId String
+  createdAt       DateTime @default(now())
+
+  task            Task     @relation("TaskBlockedBy", fields: [taskId], references: [id], onDelete: Cascade)
+  blockedBy       Task     @relation("TaskBlocking", fields: [blockedByTaskId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, blockedByTaskId])
+  @@index([blockedByTaskId])
 }

@@ -59,11 +59,19 @@ export async function createTask(input: TaskFormValues): Promise<Result<{ id: st
       contactId: v.contactId || null,
       parentTaskId: v.parentTaskId || null,
       tags: v.tags,
+      color: v.color || null,
       position,
       createdById: session.user.id,
       assignees: {
         create: v.assigneeIds.map((userId) => ({ userId })),
       },
+      ...(v.dependsOnIds.length
+        ? {
+            blockedBy: {
+              create: v.dependsOnIds.map((blockedByTaskId) => ({ blockedByTaskId })),
+            },
+          }
+        : {}),
     },
     select: { id: true },
   });
@@ -105,6 +113,7 @@ export async function updateTask(id: string, input: Partial<TaskFormValues>): Pr
   if (input.dueDate !== undefined) data.dueDate = input.dueDate ? new Date(input.dueDate) : null;
   if (input.startDate !== undefined) data.startDate = input.startDate ? new Date(input.startDate) : null;
   if (input.tags !== undefined) data.tags = input.tags;
+  if (input.color !== undefined) data.color = input.color || null;
 
   const before = await prisma.task.findUnique({
     where: { id },
@@ -234,5 +243,64 @@ export async function deleteTaskAttachment(id: string): Promise<Result> {
   await prisma.taskAttachment.delete({ where: { id } });
   await audit(session.user.id, 'attachment_delete', id);
   if (a?.task.accountId) revalidatePath(`/accounts/${a.task.accountId}`);
+  return { ok: true, data: undefined };
+}
+
+// Walk the dependency graph upward from `start` and return every taskId
+// that already (transitively) depends on it. Used to reject cycles before
+// inserting a new edge.
+async function collectAncestors(start: string): Promise<Set<string>> {
+  const seen = new Set<string>();
+  const queue: string[] = [start];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+    const parents = await prisma.taskDependency.findMany({
+      where: { blockedByTaskId: cur },
+      select: { taskId: true },
+    });
+    for (const p of parents) queue.push(p.taskId);
+  }
+  return seen;
+}
+
+export async function addTaskDependency(
+  taskId: string,
+  blockedByTaskId: string
+): Promise<Result> {
+  const session = await requireSession();
+  if (taskId === blockedByTaskId) return { ok: false, error: 'Una tarea no puede depender de sí misma' };
+
+  // Cycle check: if `taskId` already (transitively) blocks `blockedByTaskId`,
+  // adding this edge would close a loop.
+  const ancestors = await collectAncestors(taskId);
+  if (ancestors.has(blockedByTaskId)) {
+    return { ok: false, error: 'Esa relación crearía un ciclo de dependencias' };
+  }
+
+  try {
+    await prisma.taskDependency.create({ data: { taskId, blockedByTaskId } });
+  } catch {
+    // Unique violation = already linked, treat as no-op success
+  }
+
+  const t = await prisma.task.findUnique({ where: { id: taskId }, select: { accountId: true } });
+  await audit(session.user.id, 'dependency_add', taskId, { blockedByTaskId });
+  if (t?.accountId) revalidatePath(`/accounts/${t.accountId}`);
+  revalidateTag('tasks');
+  return { ok: true, data: undefined };
+}
+
+export async function removeTaskDependency(
+  taskId: string,
+  blockedByTaskId: string
+): Promise<Result> {
+  const session = await requireSession();
+  await prisma.taskDependency.deleteMany({ where: { taskId, blockedByTaskId } });
+  const t = await prisma.task.findUnique({ where: { id: taskId }, select: { accountId: true } });
+  await audit(session.user.id, 'dependency_remove', taskId, { blockedByTaskId });
+  if (t?.accountId) revalidatePath(`/accounts/${t.accountId}`);
+  revalidateTag('tasks');
   return { ok: true, data: undefined };
 }

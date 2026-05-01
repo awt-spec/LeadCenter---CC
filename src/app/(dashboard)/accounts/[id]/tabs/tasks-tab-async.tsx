@@ -1,7 +1,11 @@
-import { listTasksByAccount } from '@/lib/tasks/queries';
+import {
+  listTasksByAccount,
+  getDependencyCandidates,
+  getTaskAnalytics,
+} from '@/lib/tasks/queries';
 import { getUsersLite } from '@/lib/shared/lite-lists';
 import { prisma } from '@/lib/db';
-import { TaskKanban } from '../tasks/task-kanban';
+import { TaskViews } from '../tasks/task-views';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export async function TasksTabAsync({
@@ -13,7 +17,7 @@ export async function TasksTabAsync({
   canEdit: boolean;
   includeClosed: boolean;
 }) {
-  const [tasks, users, totals] = await Promise.all([
+  const [tasks, users, totals, analytics, dependencyCandidates] = await Promise.all([
     listTasksByAccount(accountId, { includeClosed }),
     getUsersLite(),
     prisma.task.groupBy({
@@ -21,6 +25,8 @@ export async function TasksTabAsync({
       where: { accountId, parentTaskId: null },
       _count: { _all: true },
     }),
+    getTaskAnalytics(accountId),
+    getDependencyCandidates(accountId),
   ]);
 
   const counts = totals.reduce<Record<string, number>>((acc, r) => {
@@ -31,7 +37,7 @@ export async function TasksTabAsync({
   const openTotal = Object.values(counts).reduce((a, b) => a + b, 0) - closedTotal;
 
   return (
-    <TaskKanban
+    <TaskViews
       accountId={accountId}
       initialTasks={tasks}
       users={users.map((u) => ({
@@ -44,6 +50,8 @@ export async function TasksTabAsync({
       includeClosed={includeClosed}
       openCount={openTotal}
       closedCount={closedTotal}
+      analytics={analytics}
+      dependencyCandidates={dependencyCandidates}
     />
   );
 }
@@ -52,7 +60,7 @@ export function TasksTabSkeleton() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <Skeleton className="h-4 w-40" />
+        <Skeleton className="h-9 w-72" />
         <Skeleton className="h-9 w-32" />
       </div>
       <div className="flex gap-3 overflow-x-auto pb-2">

@@ -15,7 +15,6 @@ import {
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { toast } from 'sonner';
 import { TaskCard } from './task-card';
-import { TaskCreateDialog } from './task-create-dialog';
 import { TaskDetailDrawer } from './task-detail-drawer';
 import { setTaskStatus } from '@/lib/tasks/mutations';
 import {
@@ -26,29 +25,26 @@ import {
 import type { TaskStatus } from '@/lib/tasks/schemas';
 import type { TaskWithRelations } from '@/lib/tasks/queries';
 import { cn } from '@/lib/utils';
-import { Plus, Eye, EyeOff } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 
 type UserOption = { id: string; name: string; avatarUrl?: string | null; email?: string };
+type DependencyOption = { id: string; title: string; status: string; color: string | null };
 
 export function TaskKanban({
   accountId,
   initialTasks,
   users,
   canEdit,
-  includeClosed = false,
-  openCount,
-  closedCount,
+  dependencyCandidates: _dependencyCandidates = [],
 }: {
   accountId: string;
   initialTasks: TaskWithRelations[];
   users: UserOption[];
   canEdit: boolean;
-  includeClosed?: boolean;
-  openCount?: number;
-  closedCount?: number;
+  dependencyCandidates?: DependencyOption[];
 }) {
+  // accountId is read at the call site for navigation; not used directly here
+  // beyond keeping the prop-shape stable. eslint-disable-next-line @typescript-eslint/no-unused-vars
+  void accountId;
   const router = useRouter();
   const [tasks, setTasks] = useState(initialTasks);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -101,26 +97,6 @@ export function TaskKanban({
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3 text-xs text-sysde-mid">
-          <span>
-            <strong className="text-sysde-gray">{openCount ?? tasks.length}</strong> activas
-          </span>
-          {(closedCount ?? 0) > 0 && (
-            <>
-              <span>·</span>
-              <span>
-                <strong className="text-sysde-gray">{closedCount}</strong> cerradas
-              </span>
-            </>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <ClosedFilterToggle includeClosed={includeClosed} closedCount={closedCount ?? 0} />
-          {canEdit && <TaskCreateDialog accountId={accountId} users={users} />}
-        </div>
-      </div>
-
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <div className="flex gap-3 overflow-x-auto pb-2">
           {KANBAN_COLUMNS.map((col) => {
@@ -130,8 +106,6 @@ export function TaskKanban({
                 key={col.status}
                 status={col.status as TaskStatus}
                 items={items}
-                accountId={accountId}
-                users={users}
                 canEdit={canEdit}
                 onCardClick={setOpenTaskId}
               />
@@ -160,15 +134,11 @@ export function TaskKanban({
 function KanbanColumn({
   status,
   items,
-  accountId,
-  users,
   canEdit,
   onCardClick,
 }: {
   status: TaskStatus;
   items: TaskWithRelations[];
-  accountId: string;
-  users: UserOption[];
   canEdit: boolean;
   onCardClick: (id: string) => void;
 }) {
@@ -202,53 +172,7 @@ function KanbanColumn({
             Vacío
           </div>
         )}
-        {canEdit && status !== 'DONE' && status !== 'CANCELLED' && items.length > 0 && (
-          <button
-            onClick={() => {
-              // open create dialog with status preset — quick add not implemented inline
-            }}
-            className="hidden items-center justify-center gap-1 rounded-md border border-dashed border-sysde-border py-1.5 text-[11px] text-sysde-mid hover:border-sysde-red hover:text-sysde-red"
-          >
-            <Plus className="h-3 w-3" /> Agregar
-          </button>
-        )}
       </div>
     </div>
-  );
-}
-
-function ClosedFilterToggle({
-  includeClosed,
-  closedCount,
-}: {
-  includeClosed?: boolean;
-  closedCount: number;
-}) {
-  const sp = useSearchParams();
-  // Build URL preserving other params
-  const next = new URLSearchParams(sp.toString());
-  if (includeClosed) next.delete('closed');
-  else next.set('closed', '1');
-  const Icon = includeClosed ? EyeOff : Eye;
-  const label = includeClosed
-    ? 'Solo activas'
-    : closedCount > 0
-    ? `Mostrar cerradas (${closedCount})`
-    : 'Mostrar cerradas';
-
-  return (
-    <Link
-      href={`?${next.toString()}#tasks`}
-      scroll={false}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors',
-        includeClosed
-          ? 'border-sysde-red bg-sysde-red text-white hover:bg-sysde-red-dark'
-          : 'border-sysde-border bg-white text-sysde-gray hover:bg-sysde-bg'
-      )}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {label}
-    </Link>
   );
 }

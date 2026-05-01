@@ -14,6 +14,9 @@ import {
   Paperclip,
   Plus,
   Tag,
+  Lock,
+  Link2,
+  Palette,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -53,10 +56,19 @@ import {
   deleteTaskComment,
   addTaskAttachment,
   deleteTaskAttachment,
+  removeTaskDependency,
 } from '@/lib/tasks/mutations';
+import { TASK_COLOR_PRESETS } from '@/lib/tasks/labels';
 import { cn, getInitials } from '@/lib/utils';
 
 type UserOption = { id: string; name: string; avatarUrl?: string | null; email?: string };
+
+type DepLink = {
+  blockedByTaskId?: string;
+  taskId?: string;
+  task?: { id: string; title: string; status: TaskStatus; priority: TaskPriority; color: string | null };
+  blockedBy?: { id: string; title: string; status: TaskStatus; priority: TaskPriority; color: string | null };
+};
 
 type TaskDetail = {
   id: string;
@@ -66,6 +78,7 @@ type TaskDetail = {
   priority: TaskPriority;
   dueDate: Date | null;
   tags: string[];
+  color: string | null;
   createdAt: Date;
   createdBy: { id: string; name: string };
   assignees: { user: { id: string; name: string; avatarUrl: string | null } }[];
@@ -83,6 +96,8 @@ type TaskDetail = {
     uploadedAt: Date;
     uploadedBy: { id: string; name: string };
   }[];
+  blockedBy: DepLink[];
+  blocking: DepLink[];
 };
 
 export function TaskDetailDrawer({
@@ -119,6 +134,9 @@ export function TaskDetailDrawer({
             ...data.task,
             createdAt: new Date(data.task.createdAt),
             dueDate: data.task.dueDate ? new Date(data.task.dueDate) : null,
+            color: data.task.color ?? null,
+            blockedBy: data.task.blockedBy ?? [],
+            blocking: data.task.blocking ?? [],
             comments: data.task.comments.map((c: { createdAt: string }) => ({
               ...c,
               createdAt: new Date(c.createdAt),
@@ -133,7 +151,7 @@ export function TaskDetailDrawer({
       .finally(() => setLoading(false));
   }, [taskId, open]);
 
-  function persist(patch: Partial<{ status: TaskStatus; priority: TaskPriority; title: string; description: string | null; dueDate: string | null; tags: string[]; assigneeIds: string[] }>) {
+  function persist(patch: Partial<{ status: TaskStatus; priority: TaskPriority; title: string; description: string | null; dueDate: string | null; tags: string[]; assigneeIds: string[]; color: string | null }>) {
     if (!task) return;
     setTask({ ...task, ...patch } as TaskDetail);
     startTransition(async () => {
@@ -163,6 +181,9 @@ export function TaskDetailDrawer({
           ...data.task,
           createdAt: new Date(data.task.createdAt),
           dueDate: data.task.dueDate ? new Date(data.task.dueDate) : null,
+          color: data.task.color ?? null,
+          blockedBy: data.task.blockedBy ?? [],
+          blocking: data.task.blocking ?? [],
           comments: data.task.comments.map((c: { createdAt: string }) => ({
             ...c,
             createdAt: new Date(c.createdAt),
@@ -380,6 +401,47 @@ export function TaskDetailDrawer({
             </div>
 
             <div>
+              <Label className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-sysde-mid">
+                <Palette className="h-3 w-3" /> Color
+              </Label>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    persist({ color: null });
+                    setTask({ ...task, color: null });
+                  }}
+                  className={cn(
+                    'flex h-6 w-6 items-center justify-center rounded-full border-2 text-[11px] transition-all',
+                    task.color === null ? 'border-sysde-red text-sysde-red' : 'border-sysde-border text-sysde-mid'
+                  )}
+                  title="Sin color"
+                >
+                  ∅
+                </button>
+                {TASK_COLOR_PRESETS.map((c) => {
+                  const sel = task.color === c.value;
+                  return (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => {
+                        persist({ color: c.value });
+                        setTask({ ...task, color: c.value });
+                      }}
+                      title={c.label}
+                      style={{ backgroundColor: c.value }}
+                      className={cn(
+                        'h-6 w-6 rounded-full transition-all',
+                        sel ? 'ring-2 ring-sysde-gray ring-offset-2' : 'hover:scale-110'
+                      )}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
               <Label className="text-[10px] uppercase tracking-wide text-sysde-mid">
                 Descripción
               </Label>
@@ -391,6 +453,84 @@ export function TaskDetailDrawer({
                 placeholder="Notas, requisitos, links…"
               />
             </div>
+
+            {(task.blockedBy.length > 0 || task.blocking.length > 0) && (
+              <div className="space-y-2">
+                {task.blockedBy.length > 0 && (
+                  <div>
+                    <Label className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-sysde-mid">
+                      <Lock className="h-3 w-3" /> Bloqueada por ({task.blockedBy.length})
+                    </Label>
+                    <div className="mt-1 space-y-1">
+                      {task.blockedBy.map((d) => {
+                        const t = d.blockedBy;
+                        if (!t) return null;
+                        const open = t.status !== 'DONE' && t.status !== 'CANCELLED';
+                        return (
+                          <div
+                            key={t.id}
+                            className={cn(
+                              'group flex items-center gap-2 rounded-md border p-2 text-xs',
+                              open ? 'border-amber-300/60 bg-amber-50/40' : 'border-sysde-border bg-sysde-bg/40'
+                            )}
+                          >
+                            {t.color && (
+                              <span className="h-3 w-1 shrink-0 rounded-full" style={{ backgroundColor: t.color }} />
+                            )}
+                            <span className={cn('h-2 w-2 shrink-0 rounded-full', TASK_STATUS_DOT[t.status])} />
+                            <span className="flex-1 truncate text-sysde-gray">{t.title}</span>
+                            <span className="text-[10px] text-sysde-mid">{TASK_STATUS_LABELS[t.status]}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                startTransition(async () => {
+                                  await removeTaskDependency(task.id, t.id);
+                                  setTask({
+                                    ...task,
+                                    blockedBy: task.blockedBy.filter((x) => x.blockedBy?.id !== t.id),
+                                  });
+                                  router.refresh();
+                                });
+                              }}
+                              className="opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {task.blocking.length > 0 && (
+                  <div>
+                    <Label className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-sysde-mid">
+                      <Link2 className="h-3 w-3" /> Bloquea ({task.blocking.length})
+                    </Label>
+                    <div className="mt-1 space-y-1">
+                      {task.blocking.map((d) => {
+                        const t = d.task;
+                        if (!t) return null;
+                        return (
+                          <div
+                            key={t.id}
+                            className="flex items-center gap-2 rounded-md border border-violet-200 bg-violet-50/40 p-2 text-xs"
+                          >
+                            {t.color && (
+                              <span className="h-3 w-1 shrink-0 rounded-full" style={{ backgroundColor: t.color }} />
+                            )}
+                            <span className={cn('h-2 w-2 shrink-0 rounded-full', TASK_STATUS_DOT[t.status])} />
+                            <span className="flex-1 truncate text-sysde-gray">{t.title}</span>
+                            <span className="text-[10px] text-sysde-mid">{TASK_STATUS_LABELS[t.status]}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {task.tags.length > 0 && (
               <div>

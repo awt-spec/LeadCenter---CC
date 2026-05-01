@@ -19,6 +19,8 @@ export const taskFormSchema = z.object({
   parentTaskId: z.string().optional().nullable(),
   assigneeIds: z.array(z.string()).default([]),
   tags: z.array(z.string()).default([]),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional().nullable(),
+  dependsOnIds: z.array(z.string()).default([]),
 });
 
 export type TaskFormValues = z.infer<typeof taskFormSchema>;
