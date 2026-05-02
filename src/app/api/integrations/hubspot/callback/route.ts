@@ -30,6 +30,25 @@ export async function GET(req: NextRequest) {
     const info = await getTokenInfo(tokens.access_token);
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
 
+    // Resolve the connector to a real DB user. Demo/synthetic sessions have
+    // an id that isn't in the User table, which would FK-violate. Fall back
+    // to the email lookup, then to null.
+    let connectedById: string | null = null;
+    if (session.user.email) {
+      const real = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true },
+      });
+      if (real) connectedById = real.id;
+    }
+    if (!connectedById) {
+      const exists = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { id: true },
+      });
+      if (exists) connectedById = exists.id;
+    }
+
     await prisma.integration.upsert({
       where: {
         provider_externalAccountId: { provider: 'hubspot', externalAccountId: String(info.hub_id) },
@@ -43,7 +62,7 @@ export async function GET(req: NextRequest) {
         expiresAt,
         scopes: info.scopes,
         status: 'CONNECTED',
-        connectedById: session.user.id,
+        connectedById,
       },
       update: {
         ownerEmail: info.user,
@@ -53,7 +72,7 @@ export async function GET(req: NextRequest) {
         scopes: info.scopes,
         status: 'CONNECTED',
         lastError: null,
-        connectedById: session.user.id,
+        connectedById,
       },
     });
 

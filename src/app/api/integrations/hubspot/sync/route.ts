@@ -22,8 +22,17 @@ export async function POST(req: NextRequest) {
   if (!integrationId) {
     return NextResponse.json({ error: 'No connected HubSpot integration found' }, { status: 404 });
   }
+  // Resolve to a real DB user (demo session uses synthetic id).
+  let triggeredById: string | null = null;
+  if (session.user.email) {
+    const real = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true },
+    });
+    if (real) triggeredById = real.id;
+  }
   try {
-    const { runId, stats } = await runFullSync(integrationId, session.user.id);
+    const { runId, stats } = await runFullSync(integrationId, triggeredById);
     return NextResponse.json({ ok: true, runId, stats });
   } catch (e) {
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 500 });
