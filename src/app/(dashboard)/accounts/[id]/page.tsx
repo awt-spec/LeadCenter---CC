@@ -97,7 +97,13 @@ export default async function AccountDetailPage({
                 <Badge variant="outline">{COMPANY_SIZE_LABELS[account.size]}</Badge>
                 {account.country && <Badge variant="outline">{account.country}</Badge>}
               </div>
-              {(account.domain || account.website) && (
+              {account.needsDomainReview && (
+                <div className="mt-3 inline-flex items-center gap-2 rounded-md border border-red-300 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                  Sin dominio confirmado · agregalo para evitar duplicados con HubSpot
+                </div>
+              )}
+              {(account.domain || account.website) && !account.needsDomainReview && (
                 <div className="mt-3 flex flex-wrap gap-4 text-sm">
                   {account.domain && (
                     <span className="text-sysde-mid">
@@ -209,16 +215,26 @@ export default async function AccountDetailPage({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader><CardTitle>Descripción</CardTitle></CardHeader>
-            <CardContent>
-              {account.description ? (
+          {/* Indagaciones offline — sólo se muestra cuando hay contenido real.
+              Antes esto era "Descripción" pero llenábamos boilerplate del CSV;
+              ahora sólo aparece si hay un resumen offline real. */}
+          {account.offlineResearch && (
+            <Card>
+              <CardHeader><CardTitle>Indagaciones offline</CardTitle></CardHeader>
+              <CardContent>
+                <p className="whitespace-pre-wrap text-sm text-sysde-gray">{account.offlineResearch}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {account.description && (
+            <Card>
+              <CardHeader><CardTitle>Descripción</CardTitle></CardHeader>
+              <CardContent>
                 <p className="whitespace-pre-wrap text-sm text-sysde-gray">{account.description}</p>
-              ) : (
-                <p className="text-sm text-sysde-mid">Sin descripción.</p>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           {account.internalNotes && (
             <Card>

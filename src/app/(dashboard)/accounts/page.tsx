@@ -57,6 +57,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
     id: r.id,
     name: r.name,
     domain: r.domain,
+    needsDomainReview: r.needsDomainReview,
     country: r.country,
     segment: r.segment,
     size: r.size,

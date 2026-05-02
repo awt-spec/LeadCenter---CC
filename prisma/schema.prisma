@@ -163,6 +163,13 @@ model Account {
 
   description      String?        @db.Text
   internalNotes    String?        @db.Text
+  /// Resumen preciso de indagaciones offline (calls, demos, pasillo, eventos…).
+  /// Se renderiza solo cuando tiene contenido — no mostramos card vacía.
+  offlineResearch  String?        @db.Text
+  /// True cuando el dominio es sintético (ej. .lc-imported) o falta.
+  /// La UI muestra un badge rojo "Sin dominio · revisar" para que un humano
+  /// agregue el dominio real y permita merging con futuros syncs.
+  needsDomainReview Boolean       @default(false)
 
   createdById      String?
   createdBy        User?          @relation("AccountCreator", fields: [createdById], references: [id], onDelete: SetNull)

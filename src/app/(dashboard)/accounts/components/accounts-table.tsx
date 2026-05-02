@@ -23,6 +23,7 @@ export type AccountRow = {
   id: string;
   name: string;
   domain: string | null;
+  needsDomainReview: boolean;
   country: string | null;
   segment: string | null;
   size: string;
@@ -51,9 +52,16 @@ export function AccountsTable({ rows, total, page, pageSize }: {
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sysde-red text-xs font-semibold text-white">
             {getInitials(row.original.name) || <Building2 className="h-4 w-4" />}
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="font-medium text-sysde-gray">{row.original.name}</div>
-            <div className="text-xs text-sysde-mid">{row.original.domain ?? '—'}</div>
+            {row.original.needsDomainReview ? (
+              <div className="mt-0.5 inline-flex items-center gap-1 rounded-md border border-red-300 bg-red-50 px-1.5 py-0.5 text-[11px] font-medium text-red-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                Sin dominio · revisar
+              </div>
+            ) : (
+              <div className="text-xs text-sysde-mid">{row.original.domain}</div>
+            )}
           </div>
         </div>
       ),
