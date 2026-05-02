@@ -23,23 +23,48 @@ export async function GET() {
   });
   if (!integ) return NextResponse.json({ status: 'NONE' });
 
-  const counts = await prisma.integrationMapping.groupBy({
+  const grouped = await prisma.integrationMapping.groupBy({
     by: ['internalType'],
     where: { integrationId: integ.id },
     _count: { _all: true },
   });
-  const countMap = Object.fromEntries(counts.map((c) => [c.internalType, c._count._all]));
+  const countMap = Object.fromEntries(grouped.map((c) => [c.internalType, c._count._all]));
 
   const lastRun = integ.runs[0];
+  const state = (integ.syncState ?? {}) as {
+    cursors?: { companies?: string; contacts?: string; deals?: string };
+    totals?: { companies?: number; contacts?: number; deals?: number };
+    phase?: string;
+  };
+  const totals = {
+    accounts: state.totals?.companies ?? 0,
+    contacts: state.totals?.contacts ?? 0,
+    opportunities: state.totals?.deals ?? 0,
+  };
+  const counts = {
+    accounts: countMap['Account'] ?? 0,
+    contacts: countMap['Contact'] ?? 0,
+    opportunities: countMap['Opportunity'] ?? 0,
+  };
+  const progress = {
+    accounts: totals.accounts > 0 ? Math.min(1, counts.accounts / totals.accounts) : null,
+    contacts: totals.contacts > 0 ? Math.min(1, counts.contacts / totals.contacts) : null,
+    opportunities: totals.opportunities > 0 ? Math.min(1, counts.opportunities / totals.opportunities) : null,
+  };
+  // Phase: if any cursor is present, that phase is in-progress; else 'idle'.
+  let phase: 'companies' | 'deals' | 'contacts' | 'idle' = 'idle';
+  if (state.cursors?.companies !== undefined) phase = 'companies';
+  else if (state.cursors?.deals !== undefined) phase = 'deals';
+  else if (state.cursors?.contacts !== undefined) phase = 'contacts';
+
   return NextResponse.json({
     status: integ.status,
     lastSyncedAt: integ.lastSyncedAt,
     lastError: integ.lastError,
-    counts: {
-      accounts: countMap['Account'] ?? 0,
-      contacts: countMap['Contact'] ?? 0,
-      opportunities: countMap['Opportunity'] ?? 0,
-    },
+    counts,
+    totals,
+    progress,
+    phase,
     lastRun: lastRun
       ? {
           id: lastRun.id,

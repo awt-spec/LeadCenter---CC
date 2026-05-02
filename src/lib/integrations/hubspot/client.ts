@@ -39,7 +39,9 @@ async function hsFetch(integrationId: string, path: string, init?: RequestInit):
   return res;
 }
 
-/// Stream all pages of a CRM list endpoint. Yields one batch per request.
+/// Stream all pages of a CRM list endpoint. Yields { results, nextAfter }
+/// so the caller can persist the cursor between runs (resumable syncs).
+/// Pass `startAfter` to resume from a previous cursor.
 export async function* listObjects<P = Record<string, string | null>>(
   integrationId: string,
   objectType: 'companies' | 'contacts' | 'deals',
@@ -47,10 +49,11 @@ export async function* listObjects<P = Record<string, string | null>>(
     properties?: string[];
     associations?: string[];
     limit?: number;
+    startAfter?: string;
   } = {}
-): AsyncGenerator<HsListResponse<P>['results']> {
+): AsyncGenerator<{ results: HsListResponse<P>['results']; nextAfter: string | null }> {
   const limit = options.limit ?? 100;
-  let after: string | undefined;
+  let after: string | undefined = options.startAfter;
   for (;;) {
     const params = new URLSearchParams();
     params.set('limit', String(limit));
@@ -60,10 +63,26 @@ export async function* listObjects<P = Record<string, string | null>>(
     const res = await hsFetch(integrationId, `/crm/v3/objects/${objectType}?${params.toString()}`);
     if (!res.ok) throw new Error(`HubSpot list ${objectType} failed: ${res.status} ${await res.text()}`);
     const json = (await res.json()) as HsListResponse<P>;
-    if (json.results?.length) yield json.results;
-    if (!json.paging?.next?.after) return;
-    after = json.paging.next.after;
+    const nextAfter = json.paging?.next?.after ?? null;
+    if (json.results?.length) yield { results: json.results, nextAfter };
+    if (!nextAfter) return;
+    after = nextAfter;
   }
+}
+
+/// Get an exact total count for an object type via the search endpoint
+/// (the regular list endpoint doesn't return totals).
+export async function getObjectTotal(
+  integrationId: string,
+  objectType: 'companies' | 'contacts' | 'deals'
+): Promise<number> {
+  const res = await hsFetch(integrationId, `/crm/v3/objects/${objectType}/search`, {
+    method: 'POST',
+    body: JSON.stringify({ limit: 1, filterGroups: [] }),
+  });
+  if (!res.ok) return 0;
+  const json = (await res.json()) as { total?: number };
+  return json.total ?? 0;
 }
 
 /// Fetch deal pipelines metadata so we can map dealstage → human label.

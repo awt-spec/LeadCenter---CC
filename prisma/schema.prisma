@@ -1163,6 +1163,12 @@ model Integration {
   lastSyncedAt      DateTime?
   lastError         String?
 
+  /// Resumable sync state. Lets each cron tick pick up where the previous
+  /// truncated. Shape: { cursors: { companies?, contacts?, deals? },
+  ///                     totals: { ..., fetchedAt },
+  ///                     phase:  'companies' | 'deals' | 'contacts' | 'idle' }
+  syncState         Json?    @default("{}")
+
   connectedById     String?
   connectedBy       User?    @relation("IntegrationConnector", fields: [connectedById], references: [id], onDelete: SetNull)
 

@@ -10,6 +10,9 @@ interface StatusPayload {
   lastSyncedAt: string | null;
   lastError: string | null;
   counts: { accounts: number; contacts: number; opportunities: number };
+  totals: { accounts: number; contacts: number; opportunities: number };
+  progress: { accounts: number | null; contacts: number | null; opportunities: number | null };
+  phase: 'companies' | 'deals' | 'contacts' | 'idle';
   lastRun: {
     id: string;
     status: 'running' | 'ok' | 'error';
@@ -39,13 +42,32 @@ export function HubspotActions({
   const [errMsg, setErrMsg] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Always fetch the latest status once on mount so the progress bar is
+  // present even when no tick is running.
+  useEffect(() => {
+    if (!connected) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch('/api/integrations/hubspot/status', { cache: 'no-store' });
+        const j = (await r.json()) as StatusPayload;
+        if (!cancelled) setStatus(j);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [connected]);
+
   const effectiveStatus = status?.status ?? initialStatus;
   const isSyncing = effectiveStatus === 'SYNCING' || status?.lastRun?.status === 'running';
   const isWired = effectiveStatus === 'CONNECTED' || effectiveStatus === 'SYNCING' || effectiveStatus === 'ERROR';
+  // Phase still in progress means cursors are persisted — even outside an active tick.
+  const phaseActive = status && status.phase !== 'idle';
 
-  // Poll while syncing so the user sees live counts.
+  // Poll while syncing OR a phase is mid-flight (between cron ticks).
   useEffect(() => {
-    if (!isSyncing) {
+    if (!isSyncing && !phaseActive) {
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = null;
       return;
@@ -71,7 +93,7 @@ export function HubspotActions({
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = null;
     };
-  }, [isSyncing, router]);
+  }, [isSyncing, phaseActive, router]);
 
   async function handleSync() {
     if (!integrationId) return;
@@ -93,6 +115,9 @@ export function HubspotActions({
         lastSyncedAt: null,
         lastError: null,
         counts: status?.counts ?? { accounts: 0, contacts: 0, opportunities: 0 },
+        totals: status?.totals ?? { accounts: 0, contacts: 0, opportunities: 0 },
+        progress: status?.progress ?? { accounts: null, contacts: null, opportunities: null },
+        phase: status?.phase ?? 'companies',
         lastRun: {
           id: 'optimistic',
           status: 'running',
@@ -147,20 +172,34 @@ export function HubspotActions({
         {errMsg && <span className="text-xs text-red-600">{errMsg}</span>}
       </div>
 
-      {isSyncing && status && (
+      {(isSyncing || phaseActive || status) && status && (
         <div className="rounded-lg border border-sysde-border bg-sysde-bg p-3 text-xs text-sysde-mid">
           <div className="flex items-center gap-2 font-medium text-sysde-gray">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            Sincronización activa · puede tardar varios minutos
+            {isSyncing ? (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Sincronización activa · {phaseLabel(status.phase)}
+              </>
+            ) : phaseActive ? (
+              <>
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                Sync pausado · próximo tick automático en &lt; 5 min ({phaseLabel(status.phase)})
+              </>
+            ) : (
+              <>
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                Al día
+              </>
+            )}
           </div>
-          <div className="mt-1.5 grid grid-cols-3 gap-2">
-            <Stat label="Empresas" value={status.counts.accounts} />
-            <Stat label="Contactos" value={status.counts.contacts} />
-            <Stat label="Deals" value={status.counts.opportunities} />
+          <div className="mt-2 space-y-2">
+            <ProgressBar label="Empresas" current={status.counts.accounts} total={status.totals.accounts} />
+            <ProgressBar label="Deals" current={status.counts.opportunities} total={status.totals.opportunities} />
+            <ProgressBar label="Contactos" current={status.counts.contacts} total={status.totals.contacts} />
           </div>
           {status.lastRun && status.lastRun.itemsCreated + status.lastRun.itemsUpdated > 0 && (
-            <div className="mt-1.5 text-[11px]">
-              Esta corrida: +{status.lastRun.itemsCreated} nuevos · ~{status.lastRun.itemsUpdated} actualizados
+            <div className="mt-2 text-[11px]">
+              Última corrida: +{status.lastRun.itemsCreated.toLocaleString('es-MX')} nuevos · ~{status.lastRun.itemsUpdated.toLocaleString('es-MX')} actualizados
             </div>
           )}
         </div>
@@ -169,11 +208,32 @@ export function HubspotActions({
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function phaseLabel(p: 'companies' | 'deals' | 'contacts' | 'idle'): string {
+  switch (p) {
+    case 'companies': return 'procesando empresas';
+    case 'deals': return 'procesando deals';
+    case 'contacts': return 'procesando contactos';
+    default: return 'completando';
+  }
+}
+
+function ProgressBar({ label, current, total }: { label: string; current: number; total: number }) {
+  const pct = total > 0 ? Math.min(100, (current / total) * 100) : 0;
   return (
-    <div className="rounded bg-white p-2 text-center">
-      <div className="text-[10px] uppercase tracking-wide text-sysde-mid">{label}</div>
-      <div className="text-base font-semibold text-sysde-gray">{value.toLocaleString('es-MX')}</div>
+    <div>
+      <div className="flex justify-between text-[11px] text-sysde-gray">
+        <span className="font-medium">{label}</span>
+        <span className="tabular-nums">
+          {current.toLocaleString('es-MX')}
+          {total > 0 ? ` / ${total.toLocaleString('es-MX')} (${pct.toFixed(1)}%)` : ''}
+        </span>
+      </div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-neutral-200">
+        <div
+          className="h-full rounded-full bg-sysde-red transition-[width] duration-700"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 }
