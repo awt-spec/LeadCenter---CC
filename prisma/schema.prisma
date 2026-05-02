@@ -45,6 +45,9 @@ model User {
   taskComments           TaskComment[]   @relation("TaskCommenter")
   taskAttachments        TaskAttachment[] @relation("TaskUploader")
 
+  connectedIntegrations  Integration[]   @relation("IntegrationConnector")
+  triggeredSyncRuns      SyncRun[]       @relation("SyncTrigger")
+
   @@index([email])
 }
 
@@ -1129,4 +1132,88 @@ model TaskDependency {
 
   @@id([taskId, blockedByTaskId])
   @@index([blockedByTaskId])
+}
+
+// ==================== INTEGRATIONS ====================
+
+/// External-system connections (HubSpot, Salesforce, etc.). One row per
+/// provider+account pair. Tokens are stored AES-GCM encrypted at rest.
+model Integration {
+  id                String   @id @default(cuid())
+  provider          String   // "hubspot" | "salesforce" | ...
+  status            IntegrationStatus @default(DISCONNECTED)
+
+  /// External account/portal identifier (HubSpot portalId / Salesforce orgId).
+  externalAccountId String?
+  ownerEmail        String?
+
+  /// Encrypted access + refresh tokens (AES-256-GCM, key from AUTH_SECRET).
+  encAccessToken    String?  @db.Text
+  encRefreshToken   String?  @db.Text
+  expiresAt         DateTime?
+  scopes            String[] @default([])
+
+  lastSyncedAt      DateTime?
+  lastError         String?
+
+  connectedById     String?
+  connectedBy       User?    @relation("IntegrationConnector", fields: [connectedById], references: [id], onDelete: SetNull)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  mappings          IntegrationMapping[]
+  runs              SyncRun[]
+
+  @@unique([provider, externalAccountId])
+  @@index([status])
+}
+
+enum IntegrationStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+  SYNCING
+}
+
+/// Maps an external HubSpot/SF object id to its internal LeadCenter record.
+/// Lets us idempotently upsert and detect deletes on re-sync.
+model IntegrationMapping {
+  id            String      @id @default(cuid())
+  integrationId String
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  externalType  String      // "company" | "contact" | "deal" | "task" | "note" | "engagement"
+  externalId    String
+
+  internalType  String      // "Account" | "Contact" | "Opportunity" | "Activity" | "Task"
+  internalId    String
+
+  lastSeenAt    DateTime    @default(now())
+  lastSyncedAt  DateTime    @default(now())
+
+  @@unique([integrationId, externalType, externalId])
+  @@index([internalType, internalId])
+}
+
+/// One row per sync invocation. Useful for showing history/last-run/errors.
+model SyncRun {
+  id            String      @id @default(cuid())
+  integrationId String
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  startedAt     DateTime    @default(now())
+  finishedAt    DateTime?
+  status        String      // "running" | "ok" | "error"
+  trigger       String      @default("manual") // "manual" | "webhook" | "cron"
+  itemsCreated  Int         @default(0)
+  itemsUpdated  Int         @default(0)
+  itemsSkipped  Int         @default(0)
+  error         String?     @db.Text
+  details       Json?
+
+  triggeredById String?
+  triggeredBy   User?       @relation("SyncTrigger", fields: [triggeredById], references: [id], onDelete: SetNull)
+
+  @@index([integrationId, startedAt])
 }

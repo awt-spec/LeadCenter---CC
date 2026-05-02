@@ -15,6 +15,7 @@ import {
   Inbox,
   Megaphone,
   Menu,
+  Plug,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -41,6 +42,7 @@ const PRIMARY_NAV: NavItem[] = [
 ];
 
 const SECONDARY_NAV: NavItem[] = [
+  { label: 'Integraciones', href: '/settings/integrations', icon: Plug, permission: 'settings:read' },
   { label: 'Ajustes', href: '/settings/users', icon: Settings, permission: 'settings:read' },
 ];
 

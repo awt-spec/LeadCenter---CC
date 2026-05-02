@@ -18,6 +18,7 @@ const TITLES: Record<string, string> = {
   '/inbox': 'Inbox',
   '/settings': 'Ajustes',
   '/settings/users': 'Usuarios',
+  '/settings/integrations': 'Integraciones',
 };
 
 function resolveTitle(pathname: string): string {
