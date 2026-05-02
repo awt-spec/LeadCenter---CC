@@ -9,10 +9,10 @@ interface StatusPayload {
   status: 'NONE' | 'DISCONNECTED' | 'CONNECTED' | 'SYNCING' | 'ERROR';
   lastSyncedAt: string | null;
   lastError: string | null;
-  counts: { accounts: number; contacts: number; opportunities: number };
-  totals: { accounts: number; contacts: number; opportunities: number };
-  progress: { accounts: number | null; contacts: number | null; opportunities: number | null };
-  phase: 'companies' | 'deals' | 'contacts' | 'idle';
+  counts: { accounts: number; contacts: number; opportunities: number; emails: number };
+  totals: { accounts: number; contacts: number; opportunities: number; emails: number };
+  progress: { accounts: number | null; contacts: number | null; opportunities: number | null; emails: number | null };
+  phase: 'companies' | 'deals' | 'contacts' | 'emails' | 'idle';
   lastRun: {
     id: string;
     status: 'running' | 'ok' | 'error';
@@ -114,9 +114,9 @@ export function HubspotActions({
         status: 'SYNCING',
         lastSyncedAt: null,
         lastError: null,
-        counts: status?.counts ?? { accounts: 0, contacts: 0, opportunities: 0 },
-        totals: status?.totals ?? { accounts: 0, contacts: 0, opportunities: 0 },
-        progress: status?.progress ?? { accounts: null, contacts: null, opportunities: null },
+        counts: status?.counts ?? { accounts: 0, contacts: 0, opportunities: 0, emails: 0 },
+        totals: status?.totals ?? { accounts: 0, contacts: 0, opportunities: 0, emails: 0 },
+        progress: status?.progress ?? { accounts: null, contacts: null, opportunities: null, emails: null },
         phase: status?.phase ?? 'companies',
         lastRun: {
           id: 'optimistic',
@@ -196,6 +196,7 @@ export function HubspotActions({
             <ProgressBar label="Empresas" current={status.counts.accounts} total={status.totals.accounts} />
             <ProgressBar label="Deals" current={status.counts.opportunities} total={status.totals.opportunities} />
             <ProgressBar label="Contactos" current={status.counts.contacts} total={status.totals.contacts} />
+            <ProgressBar label="Correos" current={status.counts.emails} total={status.totals.emails} />
           </div>
           {status.lastRun && status.lastRun.itemsCreated + status.lastRun.itemsUpdated > 0 && (
             <div className="mt-2 text-[11px]">
@@ -208,11 +209,12 @@ export function HubspotActions({
   );
 }
 
-function phaseLabel(p: 'companies' | 'deals' | 'contacts' | 'idle'): string {
+function phaseLabel(p: 'companies' | 'deals' | 'contacts' | 'emails' | 'idle'): string {
   switch (p) {
     case 'companies': return 'procesando empresas';
     case 'deals': return 'procesando deals';
     case 'contacts': return 'procesando contactos';
+    case 'emails': return 'procesando correos';
     default: return 'completando';
   }
 }

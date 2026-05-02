@@ -44,7 +44,7 @@ async function hsFetch(integrationId: string, path: string, init?: RequestInit):
 /// Pass `startAfter` to resume from a previous cursor.
 export async function* listObjects<P = Record<string, string | null>>(
   integrationId: string,
-  objectType: 'companies' | 'contacts' | 'deals',
+  objectType: 'companies' | 'contacts' | 'deals' | 'emails' | 'emails',
   options: {
     properties?: string[];
     associations?: string[];
@@ -74,7 +74,7 @@ export async function* listObjects<P = Record<string, string | null>>(
 /// (the regular list endpoint doesn't return totals).
 export async function getObjectTotal(
   integrationId: string,
-  objectType: 'companies' | 'contacts' | 'deals'
+  objectType: 'companies' | 'contacts' | 'deals' | 'emails'
 ): Promise<number> {
   const res = await hsFetch(integrationId, `/crm/v3/objects/${objectType}/search`, {
     method: 'POST',

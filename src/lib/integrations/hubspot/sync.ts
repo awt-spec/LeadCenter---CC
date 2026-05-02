@@ -18,13 +18,13 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import type { Account } from '@prisma/client';
 import { listObjects, getPipelines, getObjectTotal } from './client';
-import { mapCompanyToAccount, mapContactToContact, mapDealToOpportunity } from './mapping';
+import { mapCompanyToAccount, mapContactToContact, mapDealToOpportunity, mapEmailToActivity } from './mapping';
 
-type Phase = 'companies' | 'deals' | 'contacts' | 'idle';
+type Phase = 'companies' | 'deals' | 'contacts' | 'emails' | 'idle';
 
 interface SyncState {
-  cursors?: { companies?: string; contacts?: string; deals?: string };
-  totals?: { companies?: number; contacts?: number; deals?: number; fetchedAt?: string };
+  cursors?: { companies?: string; contacts?: string; deals?: string; emails?: string };
+  totals?: { companies?: number; contacts?: number; deals?: number; emails?: number; fetchedAt?: string };
   phase?: Phase;
 }
 
@@ -32,6 +32,7 @@ interface SyncStats {
   companies: { created: number; updated: number; merged: number; skipped: number };
   contacts:  { created: number; updated: number; skipped: number };
   deals:     { created: number; updated: number; skipped: number };
+  emails:    { created: number; updated: number; skipped: number };
   truncated: boolean;
   phase: Phase;
 }
@@ -40,6 +41,7 @@ const empty = (): SyncStats => ({
   companies: { created: 0, updated: 0, merged: 0, skipped: 0 },
   contacts:  { created: 0, updated: 0, skipped: 0 },
   deals:     { created: 0, updated: 0, skipped: 0 },
+  emails:    { created: 0, updated: 0, skipped: 0 },
   truncated: false,
   phase: 'companies',
 });
@@ -146,14 +148,15 @@ async function ensureTotals(integrationId: string, state: SyncState): Promise<Sy
   const fetchedAt = state.totals?.fetchedAt ? new Date(state.totals.fetchedAt).getTime() : 0;
   if (Date.now() - fetchedAt < TOTALS_TTL_MS && state.totals?.companies !== undefined) return state;
 
-  const [companies, contacts, deals] = await Promise.all([
+  const [companies, contacts, deals, emails] = await Promise.all([
     getObjectTotal(integrationId, 'companies').catch(() => state.totals?.companies ?? 0),
     getObjectTotal(integrationId, 'contacts').catch(() => state.totals?.contacts ?? 0),
     getObjectTotal(integrationId, 'deals').catch(() => state.totals?.deals ?? 0),
+    getObjectTotal(integrationId, 'emails').catch(() => state.totals?.emails ?? 0),
   ]);
   const next: SyncState = {
     ...state,
-    totals: { companies, contacts, deals, fetchedAt: new Date().toISOString() },
+    totals: { companies, contacts, deals, emails, fetchedAt: new Date().toISOString() },
   };
   await saveState(integrationId, next);
   return next;
@@ -242,6 +245,7 @@ async function safeProcess<T>(item: T, fn: (t: T) => Promise<void>, stats: SyncS
     // Bump skipped so the user sees there were issues without aborting.
     if (label === 'company') stats.companies.skipped++;
     else if (label === 'deal') stats.deals.skipped++;
+    else if (label === 'email') stats.emails.skipped++;
     else stats.contacts.skipped++;
   }
 }
@@ -384,6 +388,70 @@ async function syncContacts(integrationId: string, importerUserId: string, state
   return cursor;
 }
 
+// ====================== Phase: Emails (engagements → Activity) ======================
+
+async function syncEmails(integrationId: string, importerUserId: string, state: SyncState, stats: SyncStats, deadline: number): Promise<SyncState> {
+  stats.phase = 'emails';
+  const props = ['hs_email_subject', 'hs_email_text', 'hs_email_html', 'hs_email_direction', 'hs_email_status', 'hs_timestamp', 'hs_email_send_at', 'hs_createdate', 'hs_body_preview'];
+  const associations = ['contacts', 'companies', 'deals'];
+  let cursor: SyncState = state;
+  for await (const { results, nextAfter } of listObjects(integrationId, 'emails', { properties: props, associations, limit: 100, startAfter: cursor.cursors?.emails })) {
+    if (Date.now() > deadline) { stats.truncated = true; return cursor; }
+    await parallelMap(results, PARALLELISM, (e) => safeProcess(e, async (eItem) => {
+      const ee = eItem as {
+        id: string;
+        properties: Record<string, string | null>;
+        associations?: {
+          contacts?: { results: Array<{ id: string }> };
+          companies?: { results: Array<{ id: string }> };
+          deals?: { results: Array<{ id: string }> };
+        };
+      };
+      // Resolve associations to internal ids via mapping
+      const contactHsId = ee.associations?.contacts?.results?.[0]?.id;
+      const companyHsId = ee.associations?.companies?.results?.[0]?.id;
+      const dealHsId = ee.associations?.deals?.results?.[0]?.id;
+      const [contactMap, accountMap, dealMap] = await Promise.all([
+        contactHsId ? getMapping(integrationId, 'contact', contactHsId) : null,
+        companyHsId ? getMapping(integrationId, 'company', companyHsId) : null,
+        dealHsId ? getMapping(integrationId, 'deal', dealHsId) : null,
+      ]);
+      const contactId = contactMap?.internalId ?? null;
+      const accountId = accountMap?.internalId ?? null;
+      const opportunityId = dealMap?.internalId ?? null;
+
+      // Skip emails with no resolvable association — nothing to attach to
+      if (!contactId && !accountId && !opportunityId) {
+        stats.emails.skipped++;
+        return;
+      }
+
+      const data = mapEmailToActivity(ee.properties, contactId, accountId, opportunityId, importerUserId);
+      if (!data) { stats.emails.skipped++; return; }
+
+      const existingMap = await getMapping(integrationId, 'email', ee.id);
+      if (existingMap) {
+        await prisma.activity.update({
+          where: { id: existingMap.internalId },
+          data: { ...data, createdById: undefined },
+        });
+        stats.emails.updated++;
+        await recordMapping(integrationId, 'email', ee.id, 'Activity', existingMap.internalId);
+        return;
+      }
+      const created = await prisma.activity.create({ data, select: { id: true } });
+      stats.emails.created++;
+      await recordMapping(integrationId, 'email', ee.id, 'Activity', created.id);
+    }, stats, 'email'));
+    cursor = { ...cursor, cursors: { ...(cursor.cursors ?? {}), emails: nextAfter ?? undefined } };
+    await saveState(integrationId, cursor);
+    if (!nextAfter) break;
+  }
+  cursor = { ...cursor, cursors: { ...(cursor.cursors ?? {}), emails: undefined } };
+  await saveState(integrationId, cursor);
+  return cursor;
+}
+
 // ====================== Orchestrator ======================
 
 export async function runFullSync(integrationId: string, triggeredById: string | null): Promise<{ runId: string; stats: SyncStats }> {
@@ -410,23 +478,25 @@ export async function runFullSync(integrationId: string, triggeredById: string |
     const compInProgress = state.cursors?.companies !== undefined;
     const dealInProgress = state.cursors?.deals !== undefined;
     const contInProgress = state.cursors?.contacts !== undefined;
+    const emailInProgress = state.cursors?.emails !== undefined;
 
-    // Run companies if cursor present OR no companies cursor at all (fresh start)
-    if (compInProgress || (!dealInProgress && !contInProgress)) {
+    // Run companies if its cursor is present OR no later phase is mid-flight.
+    if (compInProgress || (!dealInProgress && !contInProgress && !emailInProgress)) {
       state = await syncCompanies(integrationId, importerId, state, stats, deadline);
     }
     if (Date.now() < deadline) state = await syncDeals(integrationId, importerId, state, stats, deadline);
     if (Date.now() < deadline) state = await syncContacts(integrationId, importerId, state, stats, deadline);
+    if (Date.now() < deadline) state = await syncEmails(integrationId, importerId, state, stats, deadline);
 
     await prisma.syncRun.update({
       where: { id: run.id },
       data: {
         status: 'ok',
         finishedAt: new Date(),
-        itemsCreated: stats.companies.created + stats.contacts.created + stats.deals.created,
+        itemsCreated: stats.companies.created + stats.contacts.created + stats.deals.created + stats.emails.created,
         itemsUpdated:
-          stats.companies.updated + stats.contacts.updated + stats.deals.updated + stats.companies.merged,
-        itemsSkipped: stats.companies.skipped + stats.contacts.skipped + stats.deals.skipped,
+          stats.companies.updated + stats.contacts.updated + stats.deals.updated + stats.emails.updated + stats.companies.merged,
+        itemsSkipped: stats.companies.skipped + stats.contacts.skipped + stats.deals.skipped + stats.emails.skipped,
         details: stats as unknown as object,
       },
     });

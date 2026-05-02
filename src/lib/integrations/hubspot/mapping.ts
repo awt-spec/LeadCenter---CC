@@ -140,6 +140,43 @@ function pickOppStage(label: string | null): OpportunityStage {
   return 'LEAD';
 }
 
+// ===== Emails → Activity =====
+
+export function mapEmailToActivity(
+  props: HsProps,
+  contactId: string | null,
+  accountId: string | null,
+  opportunityId: string | null,
+  importerUserId: string
+): Prisma.ActivityUncheckedCreateInput | null {
+  const subject = (props.hs_email_subject ?? props.subject ?? '(sin asunto)').toString().slice(0, 250);
+  const bodyText = (props.hs_email_text ?? props.hs_email_html ?? props.hs_body_preview ?? '')
+    .toString()
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 5000);
+  const ts = props.hs_timestamp ?? props.hs_email_send_at ?? props.hs_createdate;
+  const occurredAt = ts ? new Date(ts) : new Date();
+  if (Number.isNaN(occurredAt.getTime())) return null;
+
+  const direction = (props.hs_email_direction ?? 'EMAIL').toString().toUpperCase();
+  // Outbound: 'EMAIL', 'FORWARDED_EMAIL', 'REPLY_EMAIL' (sent by us).
+  // Inbound:  'INCOMING_EMAIL'.
+  const type: 'EMAIL_SENT' | 'EMAIL_RECEIVED' = direction === 'INCOMING_EMAIL' ? 'EMAIL_RECEIVED' : 'EMAIL_SENT';
+
+  return {
+    type,
+    subject,
+    bodyText: bodyText || null,
+    occurredAt,
+    contactId,
+    accountId,
+    opportunityId,
+    createdById: importerUserId,
+  };
+}
+
 function oppProb(stage: OpportunityStage): number {
   switch (stage) {
     case 'WON': return 100;
