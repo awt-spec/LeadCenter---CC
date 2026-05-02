@@ -21,19 +21,34 @@ export const HUBSPOT_SCOPES = [
   'oauth',
 ];
 
-export function getRedirectUri(): string {
+export function getRedirectUri(reqUrl?: string): string {
+  // 1. Explicit override always wins.
   const explicit = process.env.HUBSPOT_REDIRECT_URI;
   if (explicit) return explicit;
+  // 2. Derive from the incoming request when available — most reliable in
+  //    production (handles preview deploys, custom domains, etc.).
+  if (reqUrl) {
+    try {
+      const u = new URL(reqUrl);
+      return `${u.origin}/api/integrations/hubspot/callback`;
+    } catch {
+      /* fallthrough */
+    }
+  }
+  // 3. Vercel auto-sets VERCEL_URL to the host (no protocol).
+  const vercelUrl = process.env.VERCEL_URL;
+  if (vercelUrl) return `https://${vercelUrl}/api/integrations/hubspot/callback`;
+  // 4. NextAuth env var.
   const origin = process.env.NEXTAUTH_URL ?? process.env.AUTH_URL ?? 'http://localhost:3000';
   return `${origin.replace(/\/+$/, '')}/api/integrations/hubspot/callback`;
 }
 
-export function buildAuthorizeUrl(state: string): string {
+export function buildAuthorizeUrl(state: string, reqUrl?: string): string {
   const clientId = process.env.HUBSPOT_CLIENT_ID;
   if (!clientId) throw new Error('HUBSPOT_CLIENT_ID is not configured');
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: getRedirectUri(),
+    redirect_uri: getRedirectUri(reqUrl),
     scope: HUBSPOT_SCOPES.join(' '),
     state,
   });
@@ -60,7 +75,7 @@ async function postForm(url: string, body: Record<string, string>): Promise<Toke
   return (await res.json()) as TokenResponse;
 }
 
-export async function exchangeCodeForTokens(code: string): Promise<TokenResponse> {
+export async function exchangeCodeForTokens(code: string, reqUrl?: string): Promise<TokenResponse> {
   const clientId = process.env.HUBSPOT_CLIENT_ID;
   const clientSecret = process.env.HUBSPOT_CLIENT_SECRET;
   if (!clientId || !clientSecret) throw new Error('HubSpot credentials are not configured');
@@ -68,7 +83,7 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenResponse
     grant_type: 'authorization_code',
     client_id: clientId,
     client_secret: clientSecret,
-    redirect_uri: getRedirectUri(),
+    redirect_uri: getRedirectUri(reqUrl),
     code,
   });
 }

@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const tokens = await exchangeCodeForTokens(code);
+    const tokens = await exchangeCodeForTokens(code, req.url);
     const info = await getTokenInfo(tokens.access_token);
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
 
