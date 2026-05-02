@@ -10,6 +10,10 @@ import { Forbidden } from '@/components/shared/forbidden';
 import { HubspotActions } from './hubspot-actions';
 
 export const metadata = { title: 'Integraciones' };
+// Always fetch fresh — never serve a stale "Disconnected" view from cache
+// when the user navigates back to this page mid-sync.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default async function IntegrationsPage({
   searchParams,
@@ -127,9 +131,14 @@ export default async function IntegrationsPage({
 
           {canEdit && (
             <HubspotActions
-              connected={integ?.status === 'CONNECTED'}
+              connected={
+                integ?.status === 'CONNECTED' ||
+                integ?.status === 'SYNCING' ||
+                integ?.status === 'ERROR'
+              }
               hasCredentials={hasCredentials}
               integrationId={integ?.id ?? null}
+              initialStatus={integ?.status ?? 'NONE'}
             />
           )}
 
