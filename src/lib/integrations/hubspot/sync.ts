@@ -202,12 +202,48 @@ async function processCompany(integrationId: string, importerUserId: string, c: 
     return;
   }
   const dom = realDomain ?? `hs-${c.id}.hubspot.lc-imported`;
-  const created = await prisma.account.create({
-    data: { ...data, domain: dom, needsDomainReview: !realDomain },
-    select: { id: true },
-  });
-  stats.companies.created++;
-  await recordMapping(integrationId, 'company', c.id, 'Account', created.id);
+  try {
+    const created = await prisma.account.create({
+      data: { ...data, domain: dom, needsDomainReview: !realDomain },
+      select: { id: true },
+    });
+    stats.companies.created++;
+    await recordMapping(integrationId, 'company', c.id, 'Account', created.id);
+  } catch (e: unknown) {
+    // Race: a parallel worker just created an account with the same domain
+    // (HubSpot allows duplicate domains across companies). Treat as merge.
+    const code = (e as { code?: string }).code;
+    if (code !== 'P2002') throw e;
+    const racer = await prisma.account.findFirst({
+      where: { domain: { equals: dom, mode: 'insensitive' } },
+    });
+    if (!racer) throw e;
+    await prisma.account.update({
+      where: { id: racer.id },
+      data: {
+        ...data,
+        createdById: undefined,
+        domain: realDomain ?? racer.domain,
+        ...(realDomain ? { needsDomainReview: false } : {}),
+      },
+    });
+    stats.companies.merged++;
+    await recordMapping(integrationId, 'company', c.id, 'Account', racer.id);
+  }
+}
+
+/// Wrapper that swallows individual record errors so one bad row doesn't
+/// kill the whole batch — we log and let the sync keep going.
+async function safeProcess<T>(item: T, fn: (t: T) => Promise<void>, stats: SyncStats, label: string): Promise<void> {
+  try {
+    await fn(item);
+  } catch (e) {
+    console.error(`[sync] ${label} failed:`, (e as Error).message.slice(0, 200));
+    // Bump skipped so the user sees there were issues without aborting.
+    if (label === 'company') stats.companies.skipped++;
+    else if (label === 'deal') stats.deals.skipped++;
+    else stats.contacts.skipped++;
+  }
 }
 
 async function syncCompanies(integrationId: string, importerUserId: string, state: SyncState, stats: SyncStats, deadline: number): Promise<SyncState> {
@@ -216,7 +252,9 @@ async function syncCompanies(integrationId: string, importerUserId: string, stat
   let cursor: SyncState = state;
   for await (const { results, nextAfter } of listObjects(integrationId, 'companies', { properties: props, limit: 100, startAfter: cursor.cursors?.companies })) {
     if (Date.now() > deadline) { stats.truncated = true; return cursor; }
-    await parallelMap(results, PARALLELISM, (c) => processCompany(integrationId, importerUserId, c as { id: string; properties: Record<string, string | null> }, stats));
+    await parallelMap(results, PARALLELISM, (c) =>
+      safeProcess(c, (cc) => processCompany(integrationId, importerUserId, cc as { id: string; properties: Record<string, string | null> }, stats), stats, 'company')
+    );
     cursor = {
       ...cursor,
       cursors: { ...(cursor.cursors ?? {}), companies: nextAfter ?? undefined },
@@ -249,8 +287,8 @@ async function syncDeals(integrationId: string, importerUserId: string, state: S
   let cursor: SyncState = state;
   for await (const { results, nextAfter } of listObjects(integrationId, 'deals', { properties: props, associations, limit: 100, startAfter: cursor.cursors?.deals })) {
     if (Date.now() > deadline) { stats.truncated = true; return cursor; }
-    await parallelMap(results, PARALLELISM, async (d) => {
-      const dd = d as { id: string; properties: Record<string, string | null>; associations?: { companies?: { results: Array<{ id: string }> } } };
+    await parallelMap(results, PARALLELISM, (d) => safeProcess(d, async (dItem) => {
+      const dd = dItem as { id: string; properties: Record<string, string | null>; associations?: { companies?: { results: Array<{ id: string }> } } };
       const companyHsId = dd.associations?.companies?.results?.[0]?.id;
       let accountId: string | null = null;
       if (companyHsId) {
@@ -272,7 +310,7 @@ async function syncDeals(integrationId: string, importerUserId: string, state: S
       const created = await prisma.opportunity.create({ data, select: { id: true } });
       stats.deals.created++;
       await recordMapping(integrationId, 'deal', dd.id, 'Opportunity', created.id);
-    });
+    }, stats, 'deal'));
     cursor = { ...cursor, cursors: { ...(cursor.cursors ?? {}), deals: nextAfter ?? undefined } };
     await saveState(integrationId, cursor);
     if (!nextAfter) break;
@@ -291,8 +329,8 @@ async function syncContacts(integrationId: string, importerUserId: string, state
   let cursor: SyncState = state;
   for await (const { results, nextAfter } of listObjects(integrationId, 'contacts', { properties: props, associations, limit: 100, startAfter: cursor.cursors?.contacts })) {
     if (Date.now() > deadline) { stats.truncated = true; return cursor; }
-    await parallelMap(results, PARALLELISM, async (c) => {
-      const cc = c as { id: string; properties: Record<string, string | null>; associations?: { companies?: { results: Array<{ id: string }> } } };
+    await parallelMap(results, PARALLELISM, (c) => safeProcess(c, async (cItem) => {
+      const cc = cItem as { id: string; properties: Record<string, string | null>; associations?: { companies?: { results: Array<{ id: string }> } } };
       const companyHsId = cc.associations?.companies?.results?.[0]?.id;
       let accountId: string | null = null;
       if (companyHsId) {
@@ -336,7 +374,7 @@ async function syncContacts(integrationId: string, importerUserId: string, state
           throw e;
         }
       }
-    });
+    }, stats, 'contact'));
     cursor = { ...cursor, cursors: { ...(cursor.cursors ?? {}), contacts: nextAfter ?? undefined } };
     await saveState(integrationId, cursor);
     if (!nextAfter) break;
