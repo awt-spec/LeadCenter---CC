@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   // Detach: sync runs in background, response returns immediately.
   after(async () => {
     try {
-      await runFullSync(integrationId!, triggeredById);
+      await runFullSync(integrationId!, triggeredById, 'manual');
     } catch (e) {
       console.error('[hubspot-sync] failed:', e);
     }

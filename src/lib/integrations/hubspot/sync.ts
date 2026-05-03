@@ -481,9 +481,9 @@ async function syncEmails(integrationId: string, importerUserId: string, state: 
 
 // ====================== Orchestrator ======================
 
-export async function runFullSync(integrationId: string, triggeredById: string | null): Promise<{ runId: string; stats: SyncStats }> {
+export async function runFullSync(integrationId: string, triggeredById: string | null, trigger: 'manual' | 'cron' | 'webhook' = 'manual'): Promise<{ runId: string; stats: SyncStats }> {
   const run = await prisma.syncRun.create({
-    data: { integrationId, status: 'running', trigger: 'manual', triggeredById: triggeredById ?? undefined },
+    data: { integrationId, status: 'running', trigger, triggeredById: triggeredById ?? undefined },
     select: { id: true },
   });
   await prisma.integration.update({

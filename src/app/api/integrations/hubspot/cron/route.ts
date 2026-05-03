@@ -18,14 +18,26 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Self-heal: any SyncRun stuck in 'running' for > 5 min is orphaned
+  // (lambda died mid-flight). Mark it as error so the integration unlocks.
+  await prisma.syncRun.updateMany({
+    where: { status: 'running', startedAt: { lt: new Date(Date.now() - 5 * 60 * 1000) } },
+    data: { status: 'error', finishedAt: new Date(), error: 'Stuck > 5min, freed by cron' },
+  });
+  await prisma.integration.updateMany({
+    where: { provider: 'hubspot', status: 'SYNCING', updatedAt: { lt: new Date(Date.now() - 5 * 60 * 1000) } },
+    data: { status: 'CONNECTED' },
+  });
+
+  // Pick up CONNECTED + ERROR — ERROR is recoverable, we just retry.
   const integrations = await prisma.integration.findMany({
-    where: { provider: 'hubspot', status: 'CONNECTED' },
+    where: { provider: 'hubspot', status: { in: ['CONNECTED', 'ERROR'] } },
     select: { id: true, connectedById: true },
   });
   const results: Array<{ id: string; ok: boolean; error?: string }> = [];
   for (const integ of integrations) {
     try {
-      await runFullSync(integ.id, integ.connectedById);
+      await runFullSync(integ.id, integ.connectedById, 'cron');
       results.push({ id: integ.id, ok: true });
     } catch (e) {
       results.push({ id: integ.id, ok: false, error: (e as Error).message.slice(0, 200) });
