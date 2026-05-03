@@ -274,6 +274,29 @@ async function syncCompanies(integrationId: string, importerUserId: string, stat
 
 // ====================== Phase: Deals ======================
 
+const ORPHAN_DEAL_DOMAIN = 'sin-empresa.hubspot.lc-imported';
+
+/// Lazily get/create the bucket account that holds deals whose HubSpot record
+/// has no associated company. Per user request these still come into LC so
+/// they're visible — just grouped under a single placeholder account.
+async function getOrCreateOrphanAccount(importerUserId: string): Promise<string> {
+  const existing = await prisma.account.findFirst({ where: { domain: ORPHAN_DEAL_DOMAIN }, select: { id: true } });
+  if (existing) return existing.id;
+  const created = await prisma.account.create({
+    data: {
+      name: '(Sin empresa asignada · HubSpot)',
+      domain: ORPHAN_DEAL_DOMAIN,
+      status: 'PROSPECT',
+      priority: 'NORMAL',
+      needsDomainReview: false,
+      description: 'Cuenta placeholder para deals de HubSpot que no tienen empresa asociada en HubSpot. Si querés mover un deal a su empresa real, edita la oportunidad y cambia su cuenta.',
+      createdById: importerUserId,
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
 async function syncDeals(integrationId: string, importerUserId: string, state: SyncState, stats: SyncStats, deadline: number): Promise<SyncState> {
   stats.phase = 'deals';
   const pipelines = await getPipelines(integrationId);
@@ -299,7 +322,11 @@ async function syncDeals(integrationId: string, importerUserId: string, state: S
         const m = await getMapping(integrationId, 'company', companyHsId);
         if (m) accountId = m.internalId;
       }
-      if (!accountId) { stats.deals.skipped++; return; }
+      // Fallback: orphan deals (no company association in HubSpot) get parked
+      // on the placeholder bucket account so the user still sees them in LC.
+      if (!accountId) {
+        accountId = await getOrCreateOrphanAccount(importerUserId);
+      }
       const data = mapDealToOpportunity(dd.properties, accountId, importerUserId, stageById);
       const existingMap = await getMapping(integrationId, 'deal', dd.id);
       if (existingMap) {
