@@ -56,7 +56,28 @@ export async function listCampaigns(session: Session, filters: CampaignFilters) 
     prisma.campaign.count({ where }),
   ]);
 
-  return { rows, total };
+  // Aggregate enrolled-contact statuses per campaign in one query so the cards
+  // can render a distribution bar (active / completed / paused / dropped).
+  const statusGroups = rows.length
+    ? await prisma.campaignContact.groupBy({
+        by: ['campaignId', 'status'],
+        where: { campaignId: { in: rows.map((r) => r.id) } },
+        _count: { _all: true },
+      })
+    : [];
+  const statusByCampaign = new Map<string, Record<string, number>>();
+  for (const g of statusGroups) {
+    const m = statusByCampaign.get(g.campaignId) ?? {};
+    m[g.status] = g._count._all;
+    statusByCampaign.set(g.campaignId, m);
+  }
+
+  const enriched = rows.map((r) => ({
+    ...r,
+    contactStatuses: statusByCampaign.get(r.id) ?? {},
+  }));
+
+  return { rows: enriched, total };
 }
 
 export async function getCampaignById(session: Session, id: string) {
