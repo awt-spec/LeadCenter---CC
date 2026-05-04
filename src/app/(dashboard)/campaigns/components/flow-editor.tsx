@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Mail, Phone, Clock, ListChecks, Linkedin, MessageCircle, GitBranch, CalendarDays, Plus, Trash2 } from 'lucide-react';
+import { Mail, Phone, Clock, ListChecks, Linkedin, MessageCircle, GitBranch, CalendarDays, Plus, Trash2, Sparkles, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -269,18 +269,24 @@ export function FlowEditor({
 
             {form.type === 'EMAIL' && (
               <>
-                <div>
+                <div className="flex items-center justify-between">
                   <Label>Subject del email</Label>
-                  <Input
-                    value={form.emailSubject}
-                    onChange={(e) => setForm({ ...form, emailSubject: e.target.value })}
-                    placeholder="Hola {{firstName}} — propuesta SAF+"
+                  <AIDraftButton
+                    campaignId={campaignId}
+                    intent={form.name || 'introducción'}
+                    stepName={form.name}
+                    onApply={(subj, bdy) => setForm({ ...form, emailSubject: subj, emailBody: bdy })}
                   />
                 </div>
+                <Input
+                  value={form.emailSubject}
+                  onChange={(e) => setForm({ ...form, emailSubject: e.target.value })}
+                  placeholder="Hola {{firstName}} — propuesta SAF+"
+                />
                 <div>
                   <Label>Cuerpo del email</Label>
                   <Textarea
-                    rows={4}
+                    rows={5}
                     value={form.emailBody}
                     onChange={(e) => setForm({ ...form, emailBody: e.target.value })}
                   />
@@ -329,5 +335,51 @@ export function FlowEditor({
         </DialogContent>
       </Dialog>
     </Card>
+  );
+}
+
+function AIDraftButton({
+  campaignId,
+  intent,
+  stepName,
+  onApply,
+}: {
+  campaignId: string;
+  intent: string;
+  stepName: string;
+  onApply: (subject: string, body: string) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  async function go() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/ai/campaign/${campaignId}/draft-step`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intent, stepName }),
+      });
+      const json = (await res.json()) as { ok?: boolean; subject?: string; body?: string; error?: string };
+      if (!res.ok || !json.ok) {
+        toast.error(json.error ?? 'Error generando copy');
+        return;
+      }
+      onApply(json.subject ?? '', json.body ?? '');
+      toast.success('Copy generado — revisalo antes de guardar');
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={go}
+      disabled={loading}
+      className="inline-flex items-center gap-1 rounded-md border border-violet-300 bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-700 transition-colors hover:bg-violet-100 disabled:opacity-50"
+    >
+      {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+      {loading ? 'Generando…' : 'Sugerir copy'}
+    </button>
   );
 }
