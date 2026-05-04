@@ -142,6 +142,23 @@ function pickOppStage(label: string | null): OpportunityStage {
 
 // ===== Emails → Activity =====
 
+/// Properties we ask HubSpot for. Tracking metadata (opens/clicks/replies)
+/// comes alongside the email body — no separate scope needed beyond
+/// sales-email-read.
+export const HS_EMAIL_PROPS = [
+  // Body
+  'hs_email_subject', 'hs_email_text', 'hs_email_html', 'hs_body_preview',
+  // Direction + status
+  'hs_email_direction', 'hs_email_status', 'hs_email_to_email', 'hs_email_from_email',
+  // Timestamps
+  'hs_timestamp', 'hs_email_send_at', 'hs_createdate', 'hs_lastmodifieddate',
+  // Tracking — opens / clicks / replies
+  'hs_email_open_count', 'hs_email_last_open_date',
+  'hs_email_click_count', 'hs_email_last_click_date',
+  'hs_email_reply_count', 'hs_email_last_reply_date',
+  'hs_email_bounce_count',
+];
+
 export function mapEmailToActivity(
   props: HsProps,
   contactId: string | null,
@@ -149,7 +166,7 @@ export function mapEmailToActivity(
   opportunityId: string | null,
   importerUserId: string
 ): Prisma.ActivityUncheckedCreateInput | null {
-  const subject = (props.hs_email_subject ?? props.subject ?? '(sin asunto)').toString().slice(0, 250);
+  const subject = (props.hs_email_subject ?? '(sin asunto)').toString().slice(0, 250);
   const bodyText = (props.hs_email_text ?? props.hs_email_html ?? props.hs_body_preview ?? '')
     .toString()
     .replace(/<[^>]+>/g, ' ')
@@ -165,10 +182,39 @@ export function mapEmailToActivity(
   // Inbound:  'INCOMING_EMAIL'.
   const type: 'EMAIL_SENT' | 'EMAIL_RECEIVED' = direction === 'INCOMING_EMAIL' ? 'EMAIL_RECEIVED' : 'EMAIL_SENT';
 
+  // Pull tracking counts. HubSpot returns them as strings ("3") or null.
+  const num = (s: string | null | undefined): number | null => {
+    if (s === null || s === undefined || s === '') return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  };
+  const dateOrNull = (s: string | null | undefined): string | null => {
+    if (!s) return null;
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  };
+
+  const tracking = {
+    openCount: num(props.hs_email_open_count) ?? 0,
+    lastOpenedAt: dateOrNull(props.hs_email_last_open_date),
+    clickCount: num(props.hs_email_click_count) ?? 0,
+    lastClickedAt: dateOrNull(props.hs_email_last_click_date),
+    replyCount: num(props.hs_email_reply_count) ?? 0,
+    lastRepliedAt: dateOrNull(props.hs_email_last_reply_date),
+    bounceCount: num(props.hs_email_bounce_count) ?? 0,
+    status: props.hs_email_status?.toString() ?? null,
+    to: props.hs_email_to_email?.toString() ?? null,
+    from: props.hs_email_from_email?.toString() ?? null,
+  };
+
   return {
     type,
     subject,
     bodyText: bodyText || null,
+    // NOTE: tag the JSON shape so the UI doesn't try to render it as a
+    // Tiptap document (BodyRenderer expects tiptap JSON). The card has a
+    // dedicated branch for type='hs_email' that shows the tracking badges.
+    bodyJson: { type: 'hs_email', tracking } as Prisma.InputJsonValue,
     occurredAt,
     contactId,
     accountId,

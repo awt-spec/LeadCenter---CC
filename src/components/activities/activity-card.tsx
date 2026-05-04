@@ -11,6 +11,10 @@ import {
   Building2,
   Briefcase,
   User as UserIcon,
+  MailOpen,
+  MousePointerClick,
+  Reply,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -168,13 +172,28 @@ export function ActivityCard({ activity, currentUserId, hideRelations, allUsers 
         </div>
 
         {/* Body */}
-        {activity.bodyJson ? (
-          <BodyRenderer doc={activity.bodyJson} />
-        ) : activity.bodyText ? (
-          <p className="mt-3 whitespace-pre-wrap text-sm text-sysde-gray">
-            {activity.bodyText}
-          </p>
-        ) : null}
+        {(() => {
+          const json = activity.bodyJson as { type?: string; tracking?: HsEmailTracking } | null;
+          if (json?.type === 'hs_email') {
+            // HubSpot-synced email: render plain text + tracking badges.
+            return (
+              <>
+                {activity.bodyText && (
+                  <p className="mt-3 line-clamp-6 whitespace-pre-wrap text-sm text-sysde-gray">
+                    {activity.bodyText}
+                  </p>
+                )}
+                {json.tracking && <EmailTrackingRow tracking={json.tracking} />}
+              </>
+            );
+          }
+          if (activity.bodyJson) return <BodyRenderer doc={activity.bodyJson} />;
+          if (activity.bodyText)
+            return (
+              <p className="mt-3 whitespace-pre-wrap text-sm text-sysde-gray">{activity.bodyText}</p>
+            );
+          return null;
+        })()}
 
         {/* Participants */}
         {activity.participants.length > 0 && (
@@ -418,4 +437,69 @@ function renderNode(node: TiptapNode, i: number): React.ReactNode {
     default:
       return <span key={i}>{renderNodes(node.content ?? [])}</span>;
   }
+}
+
+// ===== Email tracking (HubSpot-synced emails) =====
+
+export interface HsEmailTracking {
+  openCount: number;
+  lastOpenedAt: string | null;
+  clickCount: number;
+  lastClickedAt: string | null;
+  replyCount: number;
+  lastRepliedAt: string | null;
+  bounceCount: number;
+  status: string | null;
+  to: string | null;
+  from: string | null;
+}
+
+function EmailTrackingRow({ tracking }: { tracking: HsEmailTracking }) {
+  const opened = tracking.openCount > 0;
+  const clicked = tracking.clickCount > 0;
+  const replied = tracking.replyCount > 0;
+  const bounced = tracking.bounceCount > 0;
+  const noSignal = !opened && !clicked && !replied && !bounced;
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px]">
+      {bounced && (
+        <span className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-red-50 px-2 py-0.5 font-medium text-red-700">
+          <AlertTriangle className="h-3 w-3" /> Rebotó
+        </span>
+      )}
+      {opened ? (
+        <span
+          className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700"
+          title={tracking.lastOpenedAt ? `Última apertura: ${tracking.lastOpenedAt}` : undefined}
+        >
+          <MailOpen className="h-3 w-3" />
+          {tracking.openCount === 1 ? 'Abierto' : `Abierto ${tracking.openCount} veces`}
+          {tracking.lastOpenedAt &&
+            ` · ${formatDistanceToNow(new Date(tracking.lastOpenedAt), { addSuffix: true, locale: es })}`}
+        </span>
+      ) : !bounced && !noSignal ? (
+        <span className="inline-flex items-center gap-1 rounded-md border border-sysde-border bg-sysde-bg px-2 py-0.5 text-sysde-mid">
+          Sin abrir
+        </span>
+      ) : null}
+      {clicked && (
+        <span
+          className="inline-flex items-center gap-1 rounded-md border border-sky-300 bg-sky-50 px-2 py-0.5 font-medium text-sky-700"
+          title={tracking.lastClickedAt ? `Último click: ${tracking.lastClickedAt}` : undefined}
+        >
+          <MousePointerClick className="h-3 w-3" />
+          {tracking.clickCount === 1 ? '1 click' : `${tracking.clickCount} clicks`}
+        </span>
+      )}
+      {replied && (
+        <span className="inline-flex items-center gap-1 rounded-md border border-violet-300 bg-violet-50 px-2 py-0.5 font-medium text-violet-700">
+          <Reply className="h-3 w-3" />
+          {tracking.replyCount === 1 ? 'Respondido' : `${tracking.replyCount} respuestas`}
+        </span>
+      )}
+      {noSignal && (
+        <span className="text-[11px] text-sysde-mid">Sin actividad de tracking todavía.</span>
+      )}
+    </div>
+  );
 }

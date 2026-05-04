@@ -18,7 +18,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import type { Account } from '@prisma/client';
 import { listObjects, getPipelines, getObjectTotal } from './client';
-import { mapCompanyToAccount, mapContactToContact, mapDealToOpportunity, mapEmailToActivity } from './mapping';
+import { mapCompanyToAccount, mapContactToContact, mapDealToOpportunity, mapEmailToActivity, HS_EMAIL_PROPS } from './mapping';
 
 type Phase = 'companies' | 'deals' | 'contacts' | 'emails' | 'idle';
 
@@ -423,7 +423,7 @@ async function syncEmails(integrationId: string, importerUserId: string, state: 
   // scopes, skip silently. They re-enable by re-authorising with the scopes.
   if ((state as { emailsBlocked?: boolean }).emailsBlocked) return state;
 
-  const props = ['hs_email_subject', 'hs_email_text', 'hs_email_html', 'hs_email_direction', 'hs_email_status', 'hs_timestamp', 'hs_email_send_at', 'hs_createdate', 'hs_body_preview'];
+  const props = HS_EMAIL_PROPS;
   const associations = ['contacts', 'companies', 'deals'];
   let cursor: SyncState = state;
   let iter: AsyncIterator<{ results: Array<{ id: string; properties: Record<string, string | null> }>; nextAfter: string | null }>;
