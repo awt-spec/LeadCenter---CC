@@ -76,6 +76,41 @@ export async function createTask(input: TaskFormValues): Promise<Result<{ id: st
     select: { id: true },
   });
 
+  // Subtasks (inline). Each becomes its own task with parentTaskId pointing here.
+  if (v.subtasks?.length) {
+    let subPos = 0;
+    for (const s of v.subtasks) {
+      await prisma.task.create({
+        data: {
+          title: s.title,
+          status: 'TODO',
+          priority: 'NORMAL',
+          accountId: v.accountId || null,
+          opportunityId: v.opportunityId || null,
+          contactId: v.contactId || null,
+          parentTaskId: created.id,
+          position: subPos++,
+          createdById: session.user.id,
+          assignees: { create: s.assigneeIds.map((userId) => ({ userId })) },
+        },
+      });
+    }
+  }
+
+  // Attachments — already uploaded to Vercel Blob; here we just persist rows.
+  if (v.attachments?.length) {
+    await prisma.taskAttachment.createMany({
+      data: v.attachments.map((a) => ({
+        taskId: created.id,
+        fileName: a.fileName,
+        fileUrl: a.url,
+        fileSize: a.fileSize,
+        mimeType: a.mimeType,
+        uploadedById: session.user.id,
+      })),
+    });
+  }
+
   await audit(session.user.id, 'create', created.id, v);
 
   // Notify assignees

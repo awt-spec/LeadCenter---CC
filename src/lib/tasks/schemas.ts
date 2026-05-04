@@ -21,6 +21,26 @@ export const taskFormSchema = z.object({
   tags: z.array(z.string()).default([]),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional().nullable(),
   dependsOnIds: z.array(z.string()).default([]),
+  /// Inline subtasks — created in the same round-trip as the parent task.
+  subtasks: z
+    .array(
+      z.object({
+        title: z.string().min(1).max(200),
+        assigneeIds: z.array(z.string()).default([]),
+      })
+    )
+    .default([]),
+  /// Attachments uploaded via /api/tasks/upload before submitting.
+  attachments: z
+    .array(
+      z.object({
+        url: z.string().url(),
+        fileName: z.string().min(1).max(250),
+        fileSize: z.number().int().nonnegative().default(0),
+        mimeType: z.string().default('application/octet-stream'),
+      })
+    )
+    .default([]),
 });
 
 export type TaskFormValues = z.infer<typeof taskFormSchema>;
