@@ -419,10 +419,45 @@ async function syncContacts(integrationId: string, importerUserId: string, state
 
 async function syncEmails(integrationId: string, importerUserId: string, state: SyncState, stats: SyncStats, deadline: number): Promise<SyncState> {
   stats.phase = 'emails';
+  // If the user previously hit a 403 because the OAuth app lacks the email
+  // scopes, skip silently. They re-enable by re-authorising with the scopes.
+  if ((state as { emailsBlocked?: boolean }).emailsBlocked) return state;
+
   const props = ['hs_email_subject', 'hs_email_text', 'hs_email_html', 'hs_email_direction', 'hs_email_status', 'hs_timestamp', 'hs_email_send_at', 'hs_createdate', 'hs_body_preview'];
   const associations = ['contacts', 'companies', 'deals'];
   let cursor: SyncState = state;
-  for await (const { results, nextAfter } of listObjects(integrationId, 'emails', { properties: props, associations, limit: 100, startAfter: cursor.cursors?.emails })) {
+  let iter: AsyncIterator<{ results: Array<{ id: string; properties: Record<string, string | null> }>; nextAfter: string | null }>;
+  try {
+    iter = listObjects(integrationId, 'emails', { properties: props, associations, limit: 100, startAfter: cursor.cursors?.emails })[Symbol.asyncIterator]();
+  } catch (e) {
+    return cursor;
+  }
+  while (true) {
+    let next: IteratorResult<{ results: Array<{ id: string; properties: Record<string, string | null> }>; nextAfter: string | null }>;
+    try {
+      next = await iter.next();
+    } catch (e) {
+      const msg = (e as Error).message ?? '';
+      if (/403|scope|sales-email-read|crm\.objects\.emails\.read/i.test(msg)) {
+        // Mark as blocked so future ticks skip the phase, and leave a friendly
+        // hint in the integration's lastError for the UI to render.
+        cursor = { ...cursor, emailsBlocked: true } as SyncState & { emailsBlocked: true };
+        await saveState(integrationId, cursor);
+        await prisma.integration.update({
+          where: { id: integrationId },
+          data: {
+            lastError:
+              'Para sincronizar correos faltan scopes en el HubSpot Public App: ' +
+              'sales-email-read, crm.schemas.emails.read, crm.objects.emails.read. ' +
+              'Agrégalos en developers.hubspot.com → tu app → Auth, después Desconectá y volvé a Conectar.',
+          },
+        });
+        return cursor;
+      }
+      throw e;
+    }
+    if (next.done) break;
+    const { results, nextAfter } = next.value;
     if (Date.now() > deadline) { stats.truncated = true; return cursor; }
     await parallelMap(results, PARALLELISM, (e) => safeProcess(e, async (eItem) => {
       const ee = eItem as {
