@@ -18,6 +18,9 @@ export const HUBSPOT_SCOPES = [
   'crm.schemas.companies.read',
   'crm.schemas.deals.read',
   'crm.objects.owners.read',
+  // Reading EMAIL engagements (CRM v3 /objects/emails) + their tracking
+  // metadata (open/click/reply counts, last_open_date, etc.).
+  'sales-email-read',
   'oauth',
 ];
 
