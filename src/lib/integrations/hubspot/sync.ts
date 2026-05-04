@@ -572,16 +572,27 @@ export async function runFullSync(integrationId: string, triggeredById: string |
       return Date.now() - new Date(at).getTime() < RECENT_MS;
     };
 
+    // Emails first if they have ANY pending work — emails phase is the
+    // bottleneck and contacts/deals re-iter starves it. Only do contacts
+    // re-iter once emails has caught up to 100% completion.
+    const emailsCompletedOnce = !!state.completedAt?.emails;
+    const emailsHasWork = emailInProgress || !emailsCompletedOnce;
+
     if (compInProgress || (!recentlyCompleted('companies') && !dealInProgress && !contInProgress && !emailInProgress)) {
       state = await syncCompanies(integrationId, importerId, state, stats, deadline);
     }
     if (Date.now() < deadline && (dealInProgress || !recentlyCompleted('deals'))) {
       state = await syncDeals(integrationId, importerId, state, stats, deadline);
     }
-    if (Date.now() < deadline && (contInProgress || !recentlyCompleted('contacts'))) {
+    // Skip contacts re-iter while emails still has unfinished work.
+    if (Date.now() < deadline && !emailsHasWork && (contInProgress || !recentlyCompleted('contacts'))) {
+      state = await syncContacts(integrationId, importerId, state, stats, deadline);
+    } else if (Date.now() < deadline && contInProgress) {
+      // Honor cursor mid-progress even if emails has work — finish the page
+      // we started, don't lose state. But don't START a new pass.
       state = await syncContacts(integrationId, importerId, state, stats, deadline);
     }
-    if (Date.now() < deadline && (emailInProgress || !recentlyCompleted('emails'))) {
+    if (Date.now() < deadline && emailsHasWork) {
       state = await syncEmails(integrationId, importerId, state, stats, deadline);
     }
 
