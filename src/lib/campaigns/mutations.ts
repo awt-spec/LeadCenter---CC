@@ -171,6 +171,7 @@ export async function addCampaignStep(input: CampaignStepFormValues): Promise<Re
       callScript: v.callScript || null,
       taskTitle: v.taskTitle || null,
       notes: v.notes || null,
+      targetSeniority: v.targetSeniority ?? [],
     },
     select: { id: true },
   });

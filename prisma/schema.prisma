@@ -900,6 +900,11 @@ model CampaignStep {
   taskTitle    String?
   notes        String?         @db.Text
 
+  /// Optional audience filter for this step. If non-empty, the step will only
+  /// fire for enrolled contacts whose seniorityLevel is in this list.
+  /// Empty array = sin filtro (todos los enrolled).
+  targetSeniority SeniorityLevel[] @default([])
+
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 

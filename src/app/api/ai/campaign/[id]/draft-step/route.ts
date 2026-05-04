@@ -39,9 +39,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   }
 
   const { id } = await ctx.params;
-  const body = (await req.json().catch(() => ({}))) as { intent?: string; stepName?: string };
+  const body = (await req.json().catch(() => ({}))) as {
+    intent?: string;
+    stepName?: string;
+    targetSeniority?: string[];
+  };
   const intent = (body.intent ?? 'introducción').toString().slice(0, 200);
   const stepName = (body.stepName ?? '').toString().slice(0, 100);
+  const targetSeniority = Array.isArray(body.targetSeniority) ? body.targetSeniority : [];
 
   const campaign = await prisma.campaign.findUnique({
     where: { id },
@@ -52,15 +57,32 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   });
   if (!campaign) return NextResponse.json({ error: 'Campaña no encontrada' }, { status: 404 });
 
+  const seniorityLabel: Record<string, string> = {
+    OWNER: 'dueños / fundadores',
+    C_LEVEL: 'C-level (CEO/CFO/CTO/COO)',
+    VP: 'VPs',
+    DIRECTOR: 'directores',
+    MANAGER: 'gerentes',
+    ANALYST: 'analistas / staff',
+    UNKNOWN: 'audiencia mixta',
+  };
+  const audience = targetSeniority.length
+    ? targetSeniority.map((s) => seniorityLabel[s] ?? s).join(', ')
+    : 'todos los inscritos (mixto)';
+
   const ctxLines = [
     `Campaña: ${campaign.name}${campaign.code ? ` (${campaign.code})` : ''}`,
     `Tipo: ${campaign.type} · Goal: ${campaign.goal}`,
     `Target: ${campaign.targetSegment ?? 'sin segmento'}${
       campaign.targetCountry ? ' · ' + campaign.targetCountry : ''
     }${campaign.targetProduct?.length ? ' · ' + campaign.targetProduct.join(', ') : ''}`,
+    `Audiencia del paso: ${audience}`,
     campaign.description ? `Descripción: ${campaign.description.slice(0, 500)}` : '',
     '',
     `Tipo de paso solicitado: ${intent}${stepName ? ` ("${stepName}")` : ''}`,
+    targetSeniority.length
+      ? `Adaptá el copy específicamente al perfil ${audience}: tono, ángulo de valor, jerga.`
+      : '',
   ].filter(Boolean).join('\n');
 
   const client = new Anthropic({ apiKey });

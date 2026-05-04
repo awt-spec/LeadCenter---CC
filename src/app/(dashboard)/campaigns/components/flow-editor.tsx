@@ -23,6 +23,16 @@ import {
 } from '@/components/ui/select';
 import { addCampaignStep, deleteCampaignStep } from '@/lib/campaigns/mutations';
 import { CAMPAIGN_STEP_TYPES } from '@/lib/campaigns/schemas';
+
+const SENIORITY_OPTIONS = [
+  { key: 'OWNER', label: 'Owner' },
+  { key: 'C_LEVEL', label: 'C-level' },
+  { key: 'VP', label: 'VP' },
+  { key: 'DIRECTOR', label: 'Director' },
+  { key: 'MANAGER', label: 'Manager' },
+  { key: 'ANALYST', label: 'Analista' },
+  { key: 'UNKNOWN', label: 'Sin info' },
+];
 import { CAMPAIGN_STEP_TYPE_LABELS } from '@/lib/campaigns/labels';
 import { cn } from '@/lib/utils';
 
@@ -85,6 +95,7 @@ export function FlowEditor({
     callScript: '',
     taskTitle: '',
     notes: '',
+    targetSeniority: [] as string[],
   });
 
   function reset() {
@@ -97,6 +108,7 @@ export function FlowEditor({
       callScript: '',
       taskTitle: '',
       notes: '',
+      targetSeniority: [],
     });
   }
 
@@ -112,6 +124,7 @@ export function FlowEditor({
         emailBody: form.emailBody || null,
         callScript: form.callScript || null,
         taskTitle: form.taskTitle || null,
+        targetSeniority: form.targetSeniority as never,
         notes: form.notes || null,
       });
       if (!r.ok) {
@@ -275,6 +288,7 @@ export function FlowEditor({
                     campaignId={campaignId}
                     intent={form.name || 'introducción'}
                     stepName={form.name}
+                    targetSeniority={form.targetSeniority}
                     onApply={(subj, bdy) => setForm({ ...form, emailSubject: subj, emailBody: bdy })}
                   />
                 </div>
@@ -290,6 +304,41 @@ export function FlowEditor({
                     value={form.emailBody}
                     onChange={(e) => setForm({ ...form, emailBody: e.target.value })}
                   />
+                </div>
+                <div>
+                  <Label className="flex items-center gap-1.5">
+                    Audiencia de este paso
+                    <span className="text-[11px] font-normal text-sysde-mid">
+                      (opcional · vacío = todos los inscritos)
+                    </span>
+                  </Label>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {SENIORITY_OPTIONS.map((s) => {
+                      const sel = form.targetSeniority.includes(s.key);
+                      return (
+                        <button
+                          key={s.key}
+                          type="button"
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              targetSeniority: sel
+                                ? form.targetSeniority.filter((x) => x !== s.key)
+                                : [...form.targetSeniority, s.key],
+                            })
+                          }
+                          className={
+                            'rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all ' +
+                            (sel
+                              ? 'border-violet-500 bg-violet-100 text-violet-700'
+                              : 'border-sysde-border bg-white text-sysde-gray hover:border-violet-300')
+                          }
+                        >
+                          {s.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </>
             )}
@@ -342,11 +391,13 @@ function AIDraftButton({
   campaignId,
   intent,
   stepName,
+  targetSeniority,
   onApply,
 }: {
   campaignId: string;
   intent: string;
   stepName: string;
+  targetSeniority?: string[];
   onApply: (subject: string, body: string) => void;
 }) {
   const [loading, setLoading] = useState(false);
@@ -356,7 +407,7 @@ function AIDraftButton({
       const res = await fetch(`/api/ai/campaign/${campaignId}/draft-step`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intent, stepName }),
+        body: JSON.stringify({ intent, stepName, targetSeniority }),
       });
       const json = (await res.json()) as { ok?: boolean; subject?: string; body?: string; error?: string };
       if (!res.ok || !json.ok) {

@@ -27,6 +27,8 @@ import {
 } from '../components/campaign-charts';
 import { FlowEditor } from '../components/flow-editor';
 import { EnrollContactsDialog } from '../components/enroll-contacts-dialog';
+import { AudienceBuilder } from '../components/audience-builder';
+import { prisma } from '@/lib/db';
 import { DeleteResourceButton } from '@/components/shared/delete-resource-button';
 import { deleteCampaign } from '@/lib/campaigns/mutations';
 import { format } from 'date-fns';
@@ -66,6 +68,16 @@ export default async function CampaignDetailPage({
   if (!campaign) notFound();
 
   const canEdit = hasRole(session, 'admin') || hasRole(session, 'senior_commercial');
+
+  // Distinct countries for the AudienceBuilder dropdown.
+  const countriesRaw = await prisma.account.findMany({
+    where: { country: { not: null } },
+    select: { country: true },
+    distinct: ['country'],
+    orderBy: { country: 'asc' },
+    take: 60,
+  });
+  const countries = countriesRaw.map((c) => c.country!).filter(Boolean);
 
   // Charts data
   const contactStatusMap = new Map<string, number>();
@@ -204,6 +216,7 @@ export default async function CampaignDetailPage({
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">Resumen</TabsTrigger>
+          <TabsTrigger value="audience">Audiencia</TabsTrigger>
           <TabsTrigger value="flow">Flujo</TabsTrigger>
           <TabsTrigger value="contacts">Contactos ({campaign._count.contacts})</TabsTrigger>
           <TabsTrigger value="opps">Oportunidades ({campaign._count.opportunities})</TabsTrigger>
@@ -256,6 +269,18 @@ export default async function CampaignDetailPage({
               <Field label="País objetivo" value={campaign.targetCountry ?? '—'} />
             </div>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="audience" className="space-y-4">
+          <Card className="border-violet-200 bg-violet-50/40 p-4 text-sm text-violet-800">
+            <p className="font-medium">Construí la audiencia con filtros de cuenta + contacto</p>
+            <p className="mt-1 text-xs text-violet-700">
+              Combiná filtros (e.g. <code>Cliente</code> + <code>Banco</code> + <code>C-level</code>) y preview en
+              tiempo real. Inscribís todos los contactos que matchean en un solo click — los pasos del flujo se
+              ejecutan en cada uno según las reglas de targeting de cada step.
+            </p>
+          </Card>
+          <AudienceBuilder campaignId={campaign.id} countries={countries} />
         </TabsContent>
 
         <TabsContent value="flow">

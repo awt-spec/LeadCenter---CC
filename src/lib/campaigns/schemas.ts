@@ -73,6 +73,10 @@ export const campaignFormSchema = z.object({
 
 export type CampaignFormValues = z.infer<typeof campaignFormSchema>;
 
+export const SENIORITY_LEVELS = [
+  'UNKNOWN', 'ANALYST', 'MANAGER', 'DIRECTOR', 'VP', 'C_LEVEL', 'OWNER',
+] as const;
+
 export const campaignStepFormSchema = z.object({
   campaignId: z.string(),
   order: z.number().int().min(0),
@@ -84,6 +88,9 @@ export const campaignStepFormSchema = z.object({
   callScript: z.string().optional().nullable(),
   taskTitle: z.string().max(200).optional().nullable(),
   notes: z.string().optional().nullable(),
+  /// Optional audience filter: only fire this step for enrolled contacts whose
+  /// seniorityLevel is in this list. Empty = all enrolled.
+  targetSeniority: z.array(z.enum(SENIORITY_LEVELS)).default([]),
 });
 
 export type CampaignStepFormValues = z.infer<typeof campaignStepFormSchema>;
