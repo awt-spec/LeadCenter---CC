@@ -443,23 +443,33 @@ async function syncEmails(integrationId: string, importerUserId: string, state: 
   const associations = ['contacts', 'companies', 'deals'];
   let cursor: SyncState = state;
 
-  // OPTIMIZATION: when no cursor is set AND we already have ≥100 email
-  // mappings, use the Search API filtering by hs_object_id > maxMapped.
-  // Skips ahead of the records already synced (no wasteful re-iter).
+  // OPTIMIZATION: when no cursor is set, use the Search API filtering by
+  // hs_object_id > maxMappedId so we skip ahead of records already synced.
+  // Crucial: HubSpot ids are big-number strings — must compare numerically,
+  // not lexicographically (otherwise "9" > "10000" lexically and we get
+  // a wrong maxId, defeating the whole optimization).
   let iter: AsyncIterator<{ results: Array<{ id: string; properties: Record<string, string | null> }>; nextAfter: string | null }>;
   const useSearch = !cursor.cursors?.emails;
   let maxMappedId = '0';
   if (useSearch) {
-    const maxMap = await prisma.integrationMapping.findFirst({
-      where: { integrationId, externalType: 'email' },
-      orderBy: { externalId: 'desc' },
-      select: { externalId: true },
-    });
-    if (maxMap && maxMap.externalId !== '0') maxMappedId = maxMap.externalId;
+    // Numeric MAX via raw SQL — Prisma orderBy on string field would sort
+    // lexicographically and return the wrong "highest".
+    const rows = await prisma.$queryRawUnsafe<Array<{ max: string | null }>>(
+      `SELECT MAX(CAST("externalId" AS BIGINT))::text AS max
+       FROM "IntegrationMapping"
+       WHERE "integrationId" = $1 AND "externalType" = 'email'`,
+      integrationId
+    );
+    if (rows[0]?.max && rows[0].max !== '0') maxMappedId = rows[0].max;
   }
 
+  // Track which mode we're in so we know whether to persist the pagination
+  // cursor back to syncState. In search mode the cursor is opaque and tied
+  // to the filter — don't save it; next tick recomputes maxMappedId.
+  const inSearchMode = useSearch && maxMappedId !== '0';
+
   try {
-    if (useSearch && maxMappedId !== '0') {
+    if (inSearchMode) {
       iter = searchObjectsAfterId(integrationId, 'emails', maxMappedId, {
         properties: props,
         associations,
@@ -550,8 +560,13 @@ async function syncEmails(integrationId: string, importerUserId: string, state: 
       stats.emails.created++;
       await recordMapping(integrationId, 'email', ee.id, 'Activity', created.id);
     }, stats, 'email'));
-    cursor = { ...cursor, cursors: { ...(cursor.cursors ?? {}), emails: nextAfter ?? undefined } };
-    await saveState(integrationId, cursor);
+    // Only persist cursor in list mode. In search mode the cursor is tied
+    // to the filter (maxMappedId) and would be misinterpreted by a future
+    // listObjects call. Search mode recomputes maxMappedId each tick.
+    if (!inSearchMode) {
+      cursor = { ...cursor, cursors: { ...(cursor.cursors ?? {}), emails: nextAfter ?? undefined } };
+      await saveState(integrationId, cursor);
+    }
     if (!nextAfter) break;
   }
   cursor = {
