@@ -36,6 +36,7 @@ import { listActivities } from '@/lib/activities/queries';
 import { activityFilterSchema } from '@/lib/activities/schemas';
 import { TimelineWithComposer } from '@/components/activities/timeline-with-composer';
 import { DeleteResourceButton } from '@/components/shared/delete-resource-button';
+import { EmailComposerDialog } from '@/components/email/email-composer-dialog';
 import { deleteContact } from '@/lib/contacts/mutations';
 import { CustomFieldsCard } from '@/components/custom-fields/custom-fields-card';
 import {
@@ -122,6 +123,18 @@ export default async function ContactDetailPage({
           </div>
           {canEdit && (
             <div className="flex flex-wrap gap-2">
+              <EmailComposerDialog
+                contact={{
+                  id: contact.id,
+                  email: contact.email,
+                  firstName: contact.firstName,
+                  fullName: contact.fullName,
+                  company: contact.companyName,
+                  country: contact.country,
+                }}
+                accountId={contact.accountId ?? undefined}
+                sender={{ name: session.user.name ?? 'Equipo SYSDE' }}
+              />
               <Button asChild variant="outline">
                 <Link
                   href={`/opportunities/new?contactId=${contact.id}${
