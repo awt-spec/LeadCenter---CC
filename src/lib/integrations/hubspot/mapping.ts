@@ -25,6 +25,10 @@ export function mapCompanyToAccount(props: HsProps, importerUserId: string): Pri
     status,
     priority,
     createdById: importerUserId,
+    // Default owner = the user who connected HubSpot. They can reassign
+    // manually via bulk actions later. Without this, new accounts arrive
+    // with no owner and don't show up in "my accounts" filters.
+    ownerId: importerUserId,
   };
 }
 
