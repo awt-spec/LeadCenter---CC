@@ -297,11 +297,7 @@ export default async function AccountDetailPage({
                   </TableHeader>
                   <TableBody>
                     {account.contacts.map((c) => (
-                      <TableRow
-                        key={c.id}
-                        className="cursor-pointer"
-                        onClick={() => { window.location.href = `/contacts/${c.id}`; }}
-                      >
+                      <ClickableRow key={c.id} href={`/contacts/${c.id}`}>
                         <TableCell className="font-medium">{c.fullName}</TableCell>
                         <TableCell>{c.jobTitle ?? '—'}</TableCell>
                         <TableCell className="text-sysde-mid">{c.email}</TableCell>
@@ -316,7 +312,7 @@ export default async function AccountDetailPage({
                             </div>
                           ) : '—'}
                         </TableCell>
-                      </TableRow>
+                      </ClickableRow>
                     ))}
                   </TableBody>
                 </Table>
