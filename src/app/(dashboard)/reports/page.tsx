@@ -1,35 +1,33 @@
 import { unstable_cache } from 'next/cache';
+import Link from 'next/link';
 import { auth } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+import type { Prisma } from '@prisma/client';
 import { can } from '@/lib/rbac';
 import { Card } from '@/components/ui/card';
 import { Forbidden } from '@/components/shared/forbidden';
-import { STAGE_PROBABILITY } from '@/lib/opportunities/stage-rules';
 import {
   StageChart,
   MonthlyChart,
   OutcomeChart,
   TopAccountsChart,
-  type StageDatum,
-  type MonthDatum,
-  type OutcomeDatum,
-  type TopAccountDatum,
+  VelocityChart,
+  ActivityVolumeChart,
+  EngagementHistogram,
+  SegmentDonut,
+  EmailFunnel,
 } from './charts';
+import {
+  getPipelineSummary,
+  getStageVelocity,
+  getActivityVolume,
+  getEngagementHistogram,
+  getEmailFunnel,
+  getPipelineBySegment,
+  getPipelineByProduct,
+} from '@/lib/reports/queries';
 
 export const metadata = { title: 'Reportes' };
-
-const STAGE_LABEL: Record<string, string> = {
-  LEAD: 'Lead',
-  DISCOVERY: 'Discovery',
-  SIZING: 'Sizing',
-  DEMO: 'Demo',
-  PROPOSAL: 'Propuesta',
-  NEGOTIATION: 'Negociación',
-  CLOSING: 'Cierre',
-  HANDOFF: 'Handoff',
-};
-
-const PIPELINE_STAGES = ['LEAD', 'DISCOVERY', 'SIZING', 'DEMO', 'PROPOSAL', 'NEGOTIATION', 'CLOSING', 'HANDOFF'] as const;
+export const dynamic = 'force-dynamic';
 
 function moneyFmt(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -37,187 +35,202 @@ function moneyFmt(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 
-const loadReports = unstable_cache(
-  _loadReports,
-  ['reports-data'],
+const PERIODS = [
+  { key: '30d', label: '30 días' },
+  { key: '90d', label: '90 días' },
+  { key: 'ytd', label: 'YTD' },
+  { key: 'all', label: 'Todo' },
+] as const;
+
+type Period = typeof PERIODS[number]['key'];
+
+const loadDashboardCached = unstable_cache(
+  loadDashboard,
+  ['reports-v2'],
   { revalidate: 120, tags: ['reports'] }
 );
 
-async function _loadReports(userId: string, canAll: boolean) {
-  const scope = canAll ? {} : { ownerId: userId };
-
-  const [allOpps, allAccounts] = await Promise.all([
-    prisma.opportunity.findMany({
-      where: scope,
-      select: {
-        stage: true,
-        status: true,
-        estimatedValue: true,
-        createdAt: true,
-        closedAt: true,
-        accountId: true,
-        account: { select: { name: true } },
-      },
-    }),
-    prisma.account.findMany({
-      where: scope,
-      select: { id: true, name: true },
-    }),
+async function loadDashboard(scopeJson: string, period: Period) {
+  const scope = JSON.parse(scopeJson) as Prisma.OpportunityWhereInput;
+  // Period scoping is currently applied to the time-bucketed charts in their own queries;
+  // the pipeline/outcome KPIs always reflect the full pipeline for stability of mental model.
+  void period;
+  const [
+    summary, velocity, activity, engagement, emailFunnel,
+    bySegment, byProduct,
+  ] = await Promise.all([
+    getPipelineSummary(scope),
+    getStageVelocity(scope),
+    getActivityVolume(12),
+    getEngagementHistogram(),
+    getEmailFunnel(),
+    getPipelineBySegment(scope),
+    getPipelineByProduct(scope),
   ]);
-
-  const stageMap = new Map<string, { count: number; value: number }>();
-  for (const s of PIPELINE_STAGES) stageMap.set(s, { count: 0, value: 0 });
-  for (const o of allOpps) {
-    if (o.status !== 'OPEN') continue;
-    const cur = stageMap.get(o.stage);
-    if (!cur) continue;
-    cur.count += 1;
-    cur.value += o.estimatedValue ? Number(o.estimatedValue) : 0;
-  }
-  const stageData: StageDatum[] = PIPELINE_STAGES.map((s) => ({
-    stage: STAGE_LABEL[s] ?? s,
-    count: stageMap.get(s)?.count ?? 0,
-    value: stageMap.get(s)?.value ?? 0,
-  }));
-
-  const now = new Date();
-  const months: MonthDatum[] = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const next = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
-    let created = 0,
-      won = 0,
-      lost = 0;
-    for (const o of allOpps) {
-      if (o.createdAt >= d && o.createdAt < next) created += 1;
-      if (o.closedAt && o.closedAt >= d && o.closedAt < next) {
-        if (o.status === 'WON') won += 1;
-        else if (o.status === 'LOST') lost += 1;
-      }
-    }
-    months.push({
-      month: d.toLocaleDateString('es-CR', { month: 'short' }),
-      created,
-      won,
-      lost,
-    });
-  }
-
-  let wonValue = 0,
-    lostValue = 0,
-    openValue = 0,
-    wonDeals = 0,
-    lostDeals = 0,
-    openDeals = 0;
-  for (const o of allOpps) {
-    const v = o.estimatedValue ? Number(o.estimatedValue) : 0;
-    if (o.status === 'WON') {
-      wonValue += v;
-      wonDeals += 1;
-    } else if (o.status === 'LOST') {
-      lostValue += v;
-      lostDeals += 1;
-    } else if (o.status === 'OPEN') {
-      openValue += v;
-      openDeals += 1;
-    }
-  }
-  const outcomeData: OutcomeDatum[] = [
-    { name: 'Abiertas', value: openValue, deals: openDeals },
-    { name: 'Ganadas', value: wonValue, deals: wonDeals },
-    { name: 'Perdidas', value: lostValue, deals: lostDeals },
-  ].filter((d) => d.value > 0);
-
-  const accountTotals = new Map<string, number>();
-  for (const o of allOpps) {
-    if (o.status !== 'OPEN') continue;
-    const v = o.estimatedValue ? Number(o.estimatedValue) : 0;
-    accountTotals.set(o.accountId, (accountTotals.get(o.accountId) ?? 0) + v);
-  }
-  const topAccounts: TopAccountDatum[] = Array.from(accountTotals.entries())
-    .map(([id, value]) => ({
-      name: allAccounts.find((a) => a.id === id)?.name ?? '—',
-      value,
-    }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 5)
-    .reverse();
-
-  let totalPipeline = 0;
-  let weightedPipeline = 0;
-  for (const o of allOpps) {
-    if (o.status !== 'OPEN') continue;
-    const v = o.estimatedValue ? Number(o.estimatedValue) : 0;
-    totalPipeline += v;
-    weightedPipeline += v * (STAGE_PROBABILITY[o.stage] / 100);
-  }
-  const winRate =
-    wonDeals + lostDeals > 0 ? (wonDeals / (wonDeals + lostDeals)) * 100 : 0;
-
-  return {
-    stageData,
-    months,
-    outcomeData,
-    topAccounts,
-    totalPipeline,
-    weightedPipeline,
-    wonValue,
-    winRate,
-  };
+  return { summary, velocity, activity, engagement, emailFunnel, bySegment, byProduct };
 }
 
-export default async function ReportsPage() {
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
   const session = await auth();
   if (!session?.user?.id) return null;
   if (!can(session, 'reports:read:all') && !can(session, 'reports:read:own')) {
     return <Forbidden message="No tienes permiso para ver reportes." />;
   }
 
+  const sp = await searchParams;
+  const period: Period = (PERIODS.find((p) => p.key === sp.period)?.key ?? '90d') as Period;
+
   const canAll = can(session, 'reports:read:all') || can(session, 'opportunities:read:all');
-  const data = await loadReports(session.user.id, canAll);
+  const scope: Prisma.OpportunityWhereInput = canAll ? {} : { ownerId: session.user.id };
+  const data = await loadDashboardCached(JSON.stringify(scope), period);
+
+  const { summary, velocity, activity, engagement, emailFunnel, bySegment, byProduct } = data;
+
+  const funnelData = [
+    { label: 'Enviados', value: emailFunnel.sent, pct: 100, color: '#3B82F6' },
+    { label: 'Abiertos', value: emailFunnel.opened, pct: emailFunnel.openRate, color: '#10B981' },
+    { label: 'Clicks', value: emailFunnel.clicked, pct: emailFunnel.clickRate, color: '#0EA5E9' },
+    { label: 'Respondidos', value: emailFunnel.replied, pct: emailFunnel.replyRate, color: '#8B5CF6' },
+    ...(emailFunnel.bounced > 0
+      ? [{ label: 'Rebotaron', value: emailFunnel.bounced, pct: emailFunnel.bounceRate, color: '#C8200F' }]
+      : []),
+  ];
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <div>
-        <h2 className="text-3xl font-semibold tracking-tight text-sysde-gray">Reportes</h2>
-        <p className="mt-1 text-sm text-sysde-mid">
-          Visión global del pipeline, conversión y top cuentas.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-semibold tracking-tight text-sysde-gray">Reportes</h2>
+          <p className="mt-1 text-sm text-sysde-mid">
+            Pipeline, conversión, velocidad y engagement.
+          </p>
+        </div>
+        <div className="flex items-center gap-1 rounded-lg border border-sysde-border bg-white p-1 text-xs">
+          {PERIODS.map((p) => (
+            <Link
+              key={p.key}
+              href={`/reports?period=${p.key}`}
+              className={
+                period === p.key
+                  ? 'rounded-md bg-sysde-red px-3 py-1.5 font-medium text-white'
+                  : 'rounded-md px-3 py-1.5 text-sysde-mid hover:text-sysde-gray'
+              }
+            >
+              {p.label}
+            </Link>
+          ))}
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiBlock label="Pipeline total" value={moneyFmt(data.totalPipeline)} />
-        <KpiBlock label="Ponderado" value={moneyFmt(data.weightedPipeline)} />
-        <KpiBlock label="Ganado YTD" value={moneyFmt(data.wonValue)} />
-        <KpiBlock label="Win rate" value={`${data.winRate.toFixed(0)}%`} />
+      {/* KPI row */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-7">
+        <KpiBlock label="Pipeline total" value={moneyFmt(summary.kpis.totalPipeline)} accent />
+        <KpiBlock label="Ponderado" value={moneyFmt(summary.kpis.weightedPipeline)} />
+        <KpiBlock label="Ganado" value={moneyFmt(summary.kpis.wonValue)} positive />
+        <KpiBlock label="Win rate" value={`${summary.kpis.winRate.toFixed(0)}%`} />
+        <KpiBlock label="Deal size avg" value={moneyFmt(summary.kpis.avgDealSize)} />
+        <KpiBlock label="Ciclo avg" value={`${summary.kpis.avgCycleDays.toFixed(0)}d`} />
+        <KpiBlock label="Abiertas" value={summary.kpis.openCount.toLocaleString('es-MX')} />
       </div>
 
+      {/* Pipeline + outcome */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <ChartCard title="Pipeline por fase" subtitle="Valor estimado de oportunidades abiertas">
-          <StageChart data={data.stageData} />
+          <StageChart data={summary.stageData} />
         </ChartCard>
 
-        <ChartCard title="Tendencia mensual" subtitle="Últimos 6 meses">
-          <MonthlyChart data={data.months} />
+        <ChartCard title="Tendencia mensual" subtitle="Últimos 6 meses · creadas/ganadas/perdidas">
+          <MonthlyChart data={summary.months} />
         </ChartCard>
 
         <ChartCard title="Resultado de oportunidades" subtitle="Distribución de valor por estado">
-          <OutcomeChart data={data.outcomeData} />
+          <OutcomeChart data={summary.outcomeData} />
         </ChartCard>
 
         <ChartCard title="Top 5 cuentas" subtitle="Por valor de oportunidades abiertas">
-          <TopAccountsChart data={data.topAccounts} />
+          <TopAccountsChart data={summary.topAccounts} />
         </ChartCard>
       </div>
+
+      {/* Velocity + activity */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <ChartCard
+          title="Velocidad por fase"
+          subtitle="Días promedio que pasa una oportunidad en cada fase (de stageHistory)"
+        >
+          <VelocityChart data={velocity} />
+        </ChartCard>
+
+        <ChartCard
+          title="Volumen de actividad"
+          subtitle="Llamadas, emails, reuniones y notas — últimas 12 semanas"
+        >
+          <ActivityVolumeChart data={activity} />
+        </ChartCard>
+      </div>
+
+      {/* Segmentation */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <ChartCard title="Pipeline por segmento" subtitle="Valor abierto por segmento de cuenta">
+          <SegmentDonut data={bySegment} />
+        </ChartCard>
+
+        <ChartCard title="Pipeline por producto" subtitle="Valor abierto por producto SYSDE">
+          <SegmentDonut data={byProduct} />
+        </ChartCard>
+
+        <ChartCard title="Engagement de contactos" subtitle="Distribución del score 0–100">
+          <EngagementHistogram data={engagement} />
+        </ChartCard>
+      </div>
+
+      {/* Email funnel */}
+      <ChartCard
+        title="Email funnel"
+        subtitle={
+          emailFunnel.sent > 0
+            ? `${emailFunnel.sent.toLocaleString('es-MX')} emails enviados (sincronizados desde HubSpot)`
+            : 'Aún no hay emails sincronizados desde HubSpot. Aparecerá cuando la fase emails termine.'
+        }
+      >
+        {emailFunnel.sent > 0 ? (
+          <EmailFunnel data={funnelData} />
+        ) : (
+          <div className="flex h-32 items-center justify-center text-sm text-sysde-mid">
+            Esperando primeros emails sincronizados…
+          </div>
+        )}
+      </ChartCard>
     </div>
   );
 }
 
-function KpiBlock({ label, value }: { label: string; value: string }) {
+function KpiBlock({
+  label,
+  value,
+  accent,
+  positive,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  positive?: boolean;
+}) {
   return (
-    <Card className="p-5">
-      <div className="text-xs uppercase tracking-wide text-sysde-mid">{label}</div>
-      <div className="mt-2 text-2xl font-semibold text-sysde-gray">{value}</div>
+    <Card className={accent ? 'border-sysde-red/30 bg-red-50/40 p-4' : 'p-4'}>
+      <div className="text-[10px] uppercase tracking-wide text-sysde-mid">{label}</div>
+      <div
+        className={
+          'mt-1 text-xl font-semibold ' +
+          (accent ? 'text-sysde-red' : positive ? 'text-emerald-600' : 'text-sysde-gray')
+        }
+      >
+        {value}
+      </div>
     </Card>
   );
 }

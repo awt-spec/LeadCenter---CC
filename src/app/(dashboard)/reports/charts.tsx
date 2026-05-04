@@ -119,3 +119,120 @@ export function TopAccountsChart({ data }: { data: TopAccountDatum[] }) {
     </ResponsiveContainer>
   );
 }
+
+// ===== New charts =====
+
+export type VelocityDatum = { stage: string; avgDays: number; samples: number };
+export type ActivityWeekDatum = { week: string; email: number; call: number; meeting: number; note: number };
+export type EngagementBucket = { bucket: string; count: number };
+export type SegmentDatum = { name: string; value: number };
+
+export function VelocityChart({ data }: { data: VelocityDatum[] }) {
+  return (
+    <ResponsiveContainer width="100%" height={280}>
+      <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+        <XAxis dataKey="stage" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} unit="d" />
+        <Tooltip
+          contentStyle={tooltipStyle}
+          formatter={(v, _n, p) => {
+            const payload = (p as { payload?: VelocityDatum })?.payload;
+            return [`${v} días · ${payload?.samples ?? 0} muestras`, 'Promedio'];
+          }}
+        />
+        <Bar dataKey="avgDays" fill="#F59E0B" radius={[6, 6, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function ActivityVolumeChart({ data }: { data: ActivityWeekDatum[] }) {
+  return (
+    <ResponsiveContainer width="100%" height={280}>
+      <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+        <XAxis dataKey="week" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+        <Tooltip contentStyle={tooltipStyle} />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+        <Bar dataKey="email" stackId="a" fill="#3B82F6" name="Emails" />
+        <Bar dataKey="call" stackId="a" fill="#10B981" name="Llamadas" />
+        <Bar dataKey="meeting" stackId="a" fill="#C8200F" name="Reuniones" />
+        <Bar dataKey="note" stackId="a" fill="#94A3B8" name="Notas" />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function EngagementHistogram({ data }: { data: EngagementBucket[] }) {
+  const total = data.reduce((s, d) => s + d.count, 0);
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+        <XAxis dataKey="bucket" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+        <Tooltip
+          contentStyle={tooltipStyle}
+          formatter={(v) => [`${v} contactos (${total > 0 ? ((Number(v) / total) * 100).toFixed(1) : 0}%)`, 'Score']}
+        />
+        <Bar dataKey="count" fill="#8B5CF6" radius={[6, 6, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function SegmentDonut({ data }: { data: SegmentDatum[] }) {
+  if (data.length === 0) {
+    return (
+      <div className="flex h-[260px] items-center justify-center text-xs text-sysde-mid">
+        Sin datos
+      </div>
+    );
+  }
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <PieChart>
+        <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={50} paddingAngle={2}>
+          {data.map((_, i) => (<Cell key={i} fill={COLORS[i % COLORS.length]} />))}
+        </Pie>
+        <Tooltip
+          contentStyle={tooltipStyle}
+          formatter={(v, _n, p) => {
+            const payload = (p as { payload?: SegmentDatum })?.payload;
+            return [`$${moneyFmt(Number(v))}`, payload?.name ?? ''];
+          }}
+        />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+      </PieChart>
+    </ResponsiveContainer>
+  );
+}
+
+// Email funnel — horizontal bars showing sent → opened → clicked → replied
+export type FunnelDatum = { label: string; value: number; pct: number; color: string };
+
+export function EmailFunnel({ data }: { data: FunnelDatum[] }) {
+  return (
+    <div className="space-y-3">
+      {data.map((d) => (
+        <div key={d.label}>
+          <div className="flex justify-between text-xs">
+            <span className="font-medium text-sysde-gray">{d.label}</span>
+            <span className="tabular-nums text-sysde-mid">
+              {d.value.toLocaleString('es-MX')}{' '}
+              {d.pct > 0 && <span className="text-sysde-gray">({d.pct.toFixed(1)}%)</span>}
+            </span>
+          </div>
+          <div className="mt-1 h-2 overflow-hidden rounded-full bg-neutral-100">
+            <div
+              className="h-full rounded-full transition-[width] duration-500"
+              style={{ width: `${Math.min(100, d.pct)}%`, backgroundColor: d.color }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
