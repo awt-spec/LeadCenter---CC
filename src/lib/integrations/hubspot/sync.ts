@@ -17,7 +17,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import type { Account } from '@prisma/client';
-import { listObjects, getPipelines, getObjectTotal } from './client';
+import { listObjects, getPipelines, getObjectTotal, searchObjectsAfterId } from './client';
 import { mapCompanyToAccount, mapContactToContact, mapDealToOpportunity, mapEmailToActivity, HS_EMAIL_PROPS } from './mapping';
 
 type Phase = 'companies' | 'deals' | 'contacts' | 'emails' | 'idle';
@@ -442,10 +442,39 @@ async function syncEmails(integrationId: string, importerUserId: string, state: 
   const props = HS_EMAIL_PROPS;
   const associations = ['contacts', 'companies', 'deals'];
   let cursor: SyncState = state;
+
+  // OPTIMIZATION: when no cursor is set AND we already have ≥100 email
+  // mappings, use the Search API filtering by hs_object_id > maxMapped.
+  // Skips ahead of the records already synced (no wasteful re-iter).
   let iter: AsyncIterator<{ results: Array<{ id: string; properties: Record<string, string | null> }>; nextAfter: string | null }>;
+  const useSearch = !cursor.cursors?.emails;
+  let maxMappedId = '0';
+  if (useSearch) {
+    const maxMap = await prisma.integrationMapping.findFirst({
+      where: { integrationId, externalType: 'email' },
+      orderBy: { externalId: 'desc' },
+      select: { externalId: true },
+    });
+    if (maxMap && maxMap.externalId !== '0') maxMappedId = maxMap.externalId;
+  }
+
   try {
-    iter = listObjects(integrationId, 'emails', { properties: props, associations, limit: 100, startAfter: cursor.cursors?.emails })[Symbol.asyncIterator]();
+    if (useSearch && maxMappedId !== '0') {
+      iter = searchObjectsAfterId(integrationId, 'emails', maxMappedId, {
+        properties: props,
+        associations,
+        limit: 100,
+      })[Symbol.asyncIterator]();
+    } else {
+      iter = listObjects(integrationId, 'emails', {
+        properties: props,
+        associations,
+        limit: 100,
+        startAfter: cursor.cursors?.emails,
+      })[Symbol.asyncIterator]();
+    }
   } catch (e) {
+    void e;
     return cursor;
   }
   while (true) {

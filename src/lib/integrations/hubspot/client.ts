@@ -85,6 +85,64 @@ export async function getObjectTotal(
   return json.total ?? 0;
 }
 
+/// Stream objects with hs_object_id > minId via the search endpoint.
+/// Lets us skip records already mapped — faster catch-up than re-paginating
+/// the list endpoint linearly. Search caps at 10K results; for bigger sets
+/// the caller can re-invoke with the new max id.
+export async function* searchObjectsAfterId<P = Record<string, string | null>>(
+  integrationId: string,
+  objectType: 'companies' | 'contacts' | 'deals' | 'emails',
+  minId: string,
+  options: {
+    properties?: string[];
+    associations?: string[];
+    limit?: number;
+  } = {}
+): AsyncGenerator<{ results: HsListResponse<P>['results']; nextAfter: string | null }> {
+  const limit = options.limit ?? 100;
+  let after: string | undefined;
+  for (;;) {
+    const reqBody = {
+      limit,
+      after,
+      filterGroups: [
+        { filters: [{ propertyName: 'hs_object_id', operator: 'GT', value: minId }] },
+      ],
+      sorts: [{ propertyName: 'hs_object_id', direction: 'ASCENDING' }],
+      properties: options.properties ?? [],
+    };
+    const res = await hsFetch(integrationId, `/crm/v3/objects/${objectType}/search`, {
+      method: 'POST',
+      body: JSON.stringify(reqBody),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`HubSpot search ${objectType} failed: ${res.status} ${text.slice(0, 200)}`);
+    }
+    const json = (await res.json()) as HsListResponse<P>;
+    const nextAfter = json.paging?.next?.after ?? null;
+    if (json.results?.length) {
+      // Search API doesn't include associations inline. Fetch them per record
+      // for emails (we need contact/account/deal links).
+      if (options.associations?.length) {
+        for (const r of json.results) {
+          const ar = await hsFetch(
+            integrationId,
+            `/crm/v3/objects/${objectType}/${r.id}?associations=${options.associations.join(',')}`
+          );
+          if (ar.ok) {
+            const obj = (await ar.json()) as { associations?: HsListResponse<P>['results'][number]['associations'] };
+            (r as { associations?: HsListResponse<P>['results'][number]['associations'] }).associations = obj.associations;
+          }
+        }
+      }
+      yield { results: json.results, nextAfter };
+    }
+    if (!nextAfter) return;
+    after = nextAfter;
+  }
+}
+
 /// Fetch deal pipelines metadata so we can map dealstage → human label.
 export async function getPipelines(integrationId: string): Promise<Array<{ id: string; label: string; stages: Array<{ id: string; label: string; metadata?: { probability?: string } }> }>> {
   const res = await hsFetch(integrationId, `/crm/v3/pipelines/deals`);
