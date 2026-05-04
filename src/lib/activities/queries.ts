@@ -242,3 +242,130 @@ export async function getMyCreatedActivities(session: Session) {
     take: 50,
   });
 }
+
+/// Emails recibidos (EMAIL_RECEIVED) en los últimos 30 días para los que NO hay
+/// un EMAIL_SENT posterior al mismo contacto. Heurística simple para "necesita
+/// respuesta". Limita a las cuentas/contactos donde el usuario es owner.
+export async function getEmailsNeedingReply(session: Session, days = 30) {
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  const received = await prisma.activity.findMany({
+    where: {
+      type: 'EMAIL_RECEIVED',
+      occurredAt: { gte: since },
+      OR: [
+        { contact: { ownerId: session.user.id } },
+        { account: { ownerId: session.user.id } },
+        { opportunity: { ownerId: session.user.id } },
+      ],
+    },
+    include: INCLUDE,
+    orderBy: { occurredAt: 'desc' },
+    take: 50,
+  });
+  // For each received email, check if there's a SENT after it for same contact.
+  const results: typeof received = [];
+  for (const r of received) {
+    if (!r.contactId) {
+      results.push(r);
+      continue;
+    }
+    const replied = await prisma.activity.findFirst({
+      where: {
+        type: 'EMAIL_SENT',
+        contactId: r.contactId,
+        occurredAt: { gt: r.occurredAt },
+      },
+      select: { id: true },
+    });
+    if (!replied) results.push(r);
+  }
+  return results;
+}
+
+/// Cuentas del usuario sin actividad reciente. Útil para detectar cuentas
+/// "frías" que necesitan re-warm.
+export async function getColdAccounts(session: Session, daysThreshold = 14) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - daysThreshold);
+  const accts = await prisma.account.findMany({
+    where: {
+      ownerId: session.user.id,
+      status: { in: ['PROSPECT', 'ACTIVE'] },
+      activities: {
+        none: { occurredAt: { gte: cutoff } },
+      },
+    },
+    select: {
+      id: true, name: true, domain: true, status: true, priority: true,
+      country: true, segment: true, updatedAt: true,
+      _count: { select: { contacts: true, opportunities: true, activities: true } },
+    },
+    orderBy: { updatedAt: 'asc' },
+    take: 30,
+  });
+  return accts;
+}
+
+/// Tasks asignadas al usuario que están vencidas (dueDate < now) y no DONE/CANCELLED.
+export async function getOverdueTasks(session: Session) {
+  return prisma.task.findMany({
+    where: {
+      dueDate: { lt: new Date() },
+      status: { notIn: ['DONE', 'CANCELLED'] },
+      assignees: { some: { userId: session.user.id } },
+    },
+    select: {
+      id: true, title: true, status: true, priority: true, dueDate: true, color: true,
+      account: { select: { id: true, name: true } },
+      _count: { select: { subtasks: true } },
+    },
+    orderBy: { dueDate: 'asc' },
+    take: 30,
+  });
+}
+
+/// Hero stats: counts that go into the Inbox header pill.
+export async function getInboxHeroStats(session: Session) {
+  const [unreadMentions, overdueActivities, overdueTasks, coldAccounts, emailsToReply] = await Promise.all([
+    prisma.activityMention.count({
+      where: { mentionedUserId: session.user.id, readAt: null },
+    }),
+    prisma.activity.count({
+      where: {
+        nextActionAssigneeId: session.user.id,
+        nextActionCompleted: false,
+        nextActionDate: { lt: new Date() },
+      },
+    }),
+    prisma.task.count({
+      where: {
+        dueDate: { lt: new Date() },
+        status: { notIn: ['DONE', 'CANCELLED'] },
+        assignees: { some: { userId: session.user.id } },
+      },
+    }),
+    prisma.account.count({
+      where: {
+        ownerId: session.user.id,
+        status: { in: ['PROSPECT', 'ACTIVE'] },
+        activities: {
+          none: { occurredAt: { gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) } },
+        },
+      },
+    }),
+    // Approximate count of emails received in last 30d on records the user owns.
+    prisma.activity.count({
+      where: {
+        type: 'EMAIL_RECEIVED',
+        occurredAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+        OR: [
+          { contact: { ownerId: session.user.id } },
+          { account: { ownerId: session.user.id } },
+          { opportunity: { ownerId: session.user.id } },
+        ],
+      },
+    }),
+  ]);
+  return { unreadMentions, overdueActivities, overdueTasks, coldAccounts, emailsToReply };
+}
