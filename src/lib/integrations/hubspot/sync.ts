@@ -25,6 +25,10 @@ type Phase = 'companies' | 'deals' | 'contacts' | 'emails' | 'idle';
 interface SyncState {
   cursors?: { companies?: string; contacts?: string; deals?: string; emails?: string };
   totals?: { companies?: number; contacts?: number; deals?: number; emails?: number; fetchedAt?: string };
+  /// ISO timestamps of when each phase last reached the end (no more pages).
+  /// We use these to skip a phase if it was completed within the last hour
+  /// — otherwise contacts re-iterates eternally and starves emails.
+  completedAt?: { companies?: string; contacts?: string; deals?: string; emails?: string };
   phase?: Phase;
 }
 
@@ -266,8 +270,12 @@ async function syncCompanies(integrationId: string, importerUserId: string, stat
     await saveState(integrationId, cursor);
     if (!nextAfter) break;
   }
-  // Phase complete → clear cursor
-  cursor = { ...cursor, cursors: { ...(cursor.cursors ?? {}), companies: undefined } };
+  // Phase complete → clear cursor + mark completedAt
+  cursor = {
+    ...cursor,
+    cursors: { ...(cursor.cursors ?? {}), companies: undefined },
+    completedAt: { ...(cursor.completedAt ?? {}), companies: new Date().toISOString() },
+  };
   await saveState(integrationId, cursor);
   return cursor;
 }
@@ -346,7 +354,11 @@ async function syncDeals(integrationId: string, importerUserId: string, state: S
     await saveState(integrationId, cursor);
     if (!nextAfter) break;
   }
-  cursor = { ...cursor, cursors: { ...(cursor.cursors ?? {}), deals: undefined } };
+  cursor = {
+    ...cursor,
+    cursors: { ...(cursor.cursors ?? {}), deals: undefined },
+    completedAt: { ...(cursor.completedAt ?? {}), deals: new Date().toISOString() },
+  };
   await saveState(integrationId, cursor);
   return cursor;
 }
@@ -410,7 +422,11 @@ async function syncContacts(integrationId: string, importerUserId: string, state
     await saveState(integrationId, cursor);
     if (!nextAfter) break;
   }
-  cursor = { ...cursor, cursors: { ...(cursor.cursors ?? {}), contacts: undefined } };
+  cursor = {
+    ...cursor,
+    cursors: { ...(cursor.cursors ?? {}), contacts: undefined },
+    completedAt: { ...(cursor.completedAt ?? {}), contacts: new Date().toISOString() },
+  };
   await saveState(integrationId, cursor);
   return cursor;
 }
@@ -509,7 +525,11 @@ async function syncEmails(integrationId: string, importerUserId: string, state: 
     await saveState(integrationId, cursor);
     if (!nextAfter) break;
   }
-  cursor = { ...cursor, cursors: { ...(cursor.cursors ?? {}), emails: undefined } };
+  cursor = {
+    ...cursor,
+    cursors: { ...(cursor.cursors ?? {}), emails: undefined },
+    completedAt: { ...(cursor.completedAt ?? {}), emails: new Date().toISOString() },
+  };
   await saveState(integrationId, cursor);
   return cursor;
 }
@@ -542,13 +562,28 @@ export async function runFullSync(integrationId: string, triggeredById: string |
     const contInProgress = state.cursors?.contacts !== undefined;
     const emailInProgress = state.cursors?.emails !== undefined;
 
-    // Run companies if its cursor is present OR no later phase is mid-flight.
-    if (compInProgress || (!dealInProgress && !contInProgress && !emailInProgress)) {
+    // Skip a phase if it completed within the last hour AND its cursor is
+    // undefined. This prevents the wasteful re-iter loop where contacts
+    // keeps re-syncing existing records and starves emails phase.
+    const RECENT_MS = 60 * 60 * 1000;
+    const recentlyCompleted = (phase: 'companies' | 'deals' | 'contacts' | 'emails') => {
+      const at = state.completedAt?.[phase];
+      if (!at) return false;
+      return Date.now() - new Date(at).getTime() < RECENT_MS;
+    };
+
+    if (compInProgress || (!recentlyCompleted('companies') && !dealInProgress && !contInProgress && !emailInProgress)) {
       state = await syncCompanies(integrationId, importerId, state, stats, deadline);
     }
-    if (Date.now() < deadline) state = await syncDeals(integrationId, importerId, state, stats, deadline);
-    if (Date.now() < deadline) state = await syncContacts(integrationId, importerId, state, stats, deadline);
-    if (Date.now() < deadline) state = await syncEmails(integrationId, importerId, state, stats, deadline);
+    if (Date.now() < deadline && (dealInProgress || !recentlyCompleted('deals'))) {
+      state = await syncDeals(integrationId, importerId, state, stats, deadline);
+    }
+    if (Date.now() < deadline && (contInProgress || !recentlyCompleted('contacts'))) {
+      state = await syncContacts(integrationId, importerId, state, stats, deadline);
+    }
+    if (Date.now() < deadline && (emailInProgress || !recentlyCompleted('emails'))) {
+      state = await syncEmails(integrationId, importerId, state, stats, deadline);
+    }
 
     await prisma.syncRun.update({
       where: { id: run.id },
