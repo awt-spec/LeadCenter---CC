@@ -19,6 +19,7 @@ import { deleteAccount } from '@/lib/accounts/mutations';
 import { TasksTabAsync, TasksTabSkeleton } from './tabs/tasks-tab-async';
 import { ActivityTabAsync, ActivityTabSkeleton } from './tabs/activity-tab-async';
 import { CustomFieldsCard } from '@/components/custom-fields/custom-fields-card';
+import { AccountSummaryCard } from '@/components/ai/account-summary-card';
 
 // Aggressive page-level caching. Hits inside the window are served
 // from Next's data cache without touching Prisma/Supabase. Mutations
@@ -199,6 +200,7 @@ export default async function AccountDetailPage({
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
+          <AccountSummaryCard accountId={account.id} />
           <Card>
             <CardHeader><CardTitle>Información</CardTitle></CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
