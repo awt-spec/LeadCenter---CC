@@ -52,6 +52,8 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
   ]);
 
   const canCreate = can(session, 'accounts:create');
+  const canUpdateAll = can(session, 'accounts:update:all');
+  const canDelete = can(session, 'accounts:delete');
 
   const tableRows: AccountRow[] = rows.map((r) => ({
     id: r.id,
@@ -129,6 +131,9 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
             total={total}
             page={filters.page}
             pageSize={filters.pageSize}
+            users={users.map((u) => ({ id: u.id, name: u.name }))}
+            canUpdateAll={canUpdateAll}
+            canDelete={canDelete}
           />
         )}
       </div>

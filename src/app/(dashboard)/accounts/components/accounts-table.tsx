@@ -1,13 +1,14 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef, RowSelectionState } from '@tanstack/react-table';
 import { Building2 } from 'lucide-react';
 import { DataTable } from '@/components/shared/data-table';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   ACCOUNT_STATUS_LABELS,
@@ -18,6 +19,7 @@ import {
 } from '@/lib/shared/labels';
 import { getInitials } from '@/lib/utils';
 import { PriorityCell, type Priority } from './priority-cell';
+import { BulkAccountsBar } from './bulk-accounts-bar';
 
 export type AccountRow = {
   id: string;
@@ -35,15 +37,50 @@ export type AccountRow = {
   pipelineTotal: number;
 };
 
-export function AccountsTable({ rows, total, page, pageSize }: {
+export function AccountsTable({
+  rows, total, page, pageSize,
+  users = [], canUpdateAll = false, canDelete = false,
+}: {
   rows: AccountRow[];
   total: number;
   page: number;
   pageSize: number;
+  users?: { id: string; name: string }[];
+  canUpdateAll?: boolean;
+  canDelete?: boolean;
 }) {
   const router = useRouter();
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const showBulk = canUpdateAll || canDelete;
 
-  const columns = useMemo<ColumnDef<AccountRow, unknown>[]>(() => [
+  const columns = useMemo<ColumnDef<AccountRow, unknown>[]>(() => {
+    const selectCol: ColumnDef<AccountRow, unknown> = {
+      id: 'select',
+      size: 40,
+      header: ({ table }) => (
+        <div data-row-interactive>
+          <Checkbox
+            checked={
+              table.getIsAllPageRowsSelected() ||
+              (table.getIsSomePageRowsSelected() && 'indeterminate')
+            }
+            onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
+            aria-label="Seleccionar todos"
+          />
+        </div>
+      ),
+      cell: ({ row }) => (
+        <div data-row-interactive>
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(v) => row.toggleSelected(!!v)}
+            aria-label="Seleccionar fila"
+          />
+        </div>
+      ),
+      enableSorting: false,
+    };
+    const baseCols: ColumnDef<AccountRow, unknown>[] = [
     {
       id: 'name',
       header: 'Cuenta',
@@ -159,17 +196,31 @@ export function AccountsTable({ rows, total, page, pageSize }: {
         </span>
       ),
     },
-  ], []);
+    ];
+    return showBulk ? [selectCol, ...baseCols] : baseCols;
+  }, [showBulk]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const selectedIds = Object.keys(rowSelection).filter((id) => rowSelection[id]);
 
   return (
     <div>
+      {showBulk && (
+        <BulkAccountsBar
+          selectedIds={selectedIds}
+          users={users}
+          canUpdateAll={canUpdateAll}
+          canDelete={canDelete}
+          onClear={() => setRowSelection({})}
+        />
+      )}
       <DataTable
         columns={columns}
         data={rows}
         getRowId={(r) => r.id}
         onRowClick={(r) => router.push(`/accounts/${r.id}`)}
+        rowSelection={rowSelection}
+        onRowSelectionChange={setRowSelection}
       />
       <div className="mt-4 flex items-center justify-between text-sm text-sysde-mid">
         <div>

@@ -274,3 +274,69 @@ export async function linkContactToAccount(
   revalidateTag('accounts');
   return { ok: true, data: undefined };
 }
+
+// ===== Bulk operations =====
+
+type BulkAction =
+  | { action: 'assign_owner'; accountIds: string[]; ownerId: string | null }
+  | { action: 'set_status'; accountIds: string[]; status: 'PROSPECT' | 'ACTIVE' | 'CUSTOMER' | 'PARTNER' | 'LOST' | 'INACTIVE' | 'BLOCKED' }
+  | { action: 'set_priority'; accountIds: string[]; priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT' }
+  | { action: 'delete'; accountIds: string[] };
+
+export async function bulkUpdateAccounts(input: BulkAction): Promise<ActionResult<{ affected: number }>> {
+  const session = await requireSession();
+  if (!input.accountIds.length) return { ok: false, error: 'Sin cuentas seleccionadas.' };
+
+  const isDelete = input.action === 'delete';
+  if (isDelete && !can(session, 'accounts:delete')) {
+    return { ok: false, error: 'Sin permiso para borrar cuentas.' };
+  }
+  if (!isDelete && !can(session, 'accounts:update:all')) {
+    return { ok: false, error: 'Sin permiso para actualizar cuentas.' };
+  }
+
+  let affected = 0;
+  switch (input.action) {
+    case 'assign_owner': {
+      const r = await prisma.account.updateMany({
+        where: { id: { in: input.accountIds } },
+        data: { ownerId: input.ownerId },
+      });
+      affected = r.count;
+      break;
+    }
+    case 'set_status': {
+      const r = await prisma.account.updateMany({
+        where: { id: { in: input.accountIds } },
+        data: { status: input.status },
+      });
+      affected = r.count;
+      break;
+    }
+    case 'set_priority': {
+      const r = await prisma.account.updateMany({
+        where: { id: { in: input.accountIds } },
+        data: { priority: input.priority },
+      });
+      affected = r.count;
+      break;
+    }
+    case 'delete': {
+      const r = await prisma.account.deleteMany({
+        where: { id: { in: input.accountIds } },
+      });
+      affected = r.count;
+      break;
+    }
+  }
+
+  await writeAudit({
+    userId: session.user.id,
+    action: `bulk_${input.action}`,
+    changes: { accountIds: input.accountIds, affected, payload: input },
+  });
+
+  revalidatePath('/accounts');
+  revalidateTag('accounts');
+  return { ok: true, data: { affected } };
+}
