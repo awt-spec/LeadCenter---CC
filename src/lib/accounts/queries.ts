@@ -106,6 +106,10 @@ export const getAccountMinimal = unstable_cache(
 
 // Raw lookup cached per-id. Session-dependent RBAC check stays out of
 // the cache key (applied at the call site below).
+//
+// Performance: limits + selective fields. Tabs that need MORE data
+// (full activity timeline, all tasks, etc.) fetch their own data
+// async via Suspense — no need to pre-load everything here.
 const getAccountByIdRaw = unstable_cache(
   async (id: string) => {
     return prisma.account.findUnique({
@@ -116,26 +120,32 @@ const getAccountByIdRaw = unstable_cache(
         parentAccount: { select: { id: true, name: true } },
         childAccounts: { select: { id: true, name: true, status: true } },
         contacts: {
-          include: {
+          // Only fetch what the contacts table preview shows. Tags are
+          // visible only on the contacts detail, not on this preview.
+          select: {
+            id: true, fullName: true, email: true, jobTitle: true, avatarUrl: true,
+            seniorityLevel: true, status: true, createdAt: true,
             owner: { select: { id: true, name: true, avatarUrl: true } },
-            tags: { include: { tag: true } },
           },
           orderBy: { createdAt: 'desc' },
-          take: 100,
+          take: 50,
         },
         opportunities: {
-          include: {
+          select: {
+            id: true, name: true, code: true, stage: true, status: true,
+            estimatedValue: true, currency: true, expectedCloseDate: true,
+            product: true, ownerId: true,
             owner: { select: { id: true, name: true, avatarUrl: true } },
           },
           orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
-          take: 50,
+          take: 30,
         },
         _count: { select: { contacts: true, opportunities: true } },
       },
     });
   },
   ['account-detail'],
-  { revalidate: 60, tags: ['accounts'] }
+  { revalidate: 120, tags: ['accounts'] }
 );
 
 export async function getAccountById(session: Session, id: string) {

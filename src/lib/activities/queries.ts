@@ -37,24 +37,31 @@ const INCLUDE = {
   contact: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
   account: { select: { id: true, name: true } },
   opportunity: { select: { id: true, name: true, code: true } },
+  // Cap nested relations — la card sólo muestra los primeros 5 anyway,
+  // y la mayoría de actividades importadas (Asana) tienen 0 acá. Evita
+  // cargar arrays gigantes para activities populares.
   participants: {
     include: {
       contact: { select: { id: true, fullName: true, avatarUrl: true } },
     },
+    take: 8,
   },
   mentions: {
     include: {
       mentionedUser: { select: { id: true, name: true, avatarUrl: true } },
     },
+    take: 5,
   },
   attachments: {
     select: { id: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true },
+    take: 8,
   },
   nextActionAssignee: { select: { id: true, name: true, avatarUrl: true } },
   assignees: {
     include: {
       user: { select: { id: true, name: true, email: true, avatarUrl: true } },
     },
+    take: 5,
   },
 } satisfies Prisma.ActivityInclude;
 
