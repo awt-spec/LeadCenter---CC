@@ -20,6 +20,7 @@ import { activityFilterSchema } from '@/lib/activities/schemas';
 import { getAccountsLite, getOpportunitiesLite, getUsersLite } from '@/lib/shared/lite-lists';
 import { TimelineWithComposer } from '@/components/activities/timeline-with-composer';
 import { NextActionCard } from '@/components/activities/next-action-card';
+import { CheckpointPanel } from '@/components/checkpoints/checkpoint-panel';
 import {
   PRODUCT_LABELS,
   SUB_PRODUCT_LABELS,
@@ -186,6 +187,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                 Contactos ({opp.contactRoles.length})
               </TabsTrigger>
               <TabsTrigger value="activity">Actividad</TabsTrigger>
+              <TabsTrigger value="checkpoints">Puntos de control</TabsTrigger>
               <TabsTrigger value="history">Historia de fases</TabsTrigger>
               {canSeeAudit && <TabsTrigger value="audit">Auditoría</TabsTrigger>}
             </TabsList>
@@ -297,6 +299,14 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                 opportunities={composerOpps}
                 users={usersLite.map((u) => ({ id: u.id, name: u.name }))}
                 canCreate={can(session, 'activities:create')}
+              />
+            </TabsContent>
+
+            <TabsContent value="checkpoints">
+              <CheckpointPanel
+                opportunityId={opp.id}
+                checkpoints={opp.checkpoints}
+                canEdit={canEdit}
               />
             </TabsContent>
 

@@ -131,6 +131,15 @@ export async function getOpportunityById(session: Session, id: string) {
         },
         orderBy: { changedAt: 'desc' },
       },
+      checkpoints: {
+        include: {
+          assignee: { select: { id: true, name: true } },
+          createdBy: { select: { id: true, name: true } },
+          completedBy: { select: { id: true, name: true } },
+        },
+        // Pendings first, then completed; within each by dueDate asc.
+        orderBy: [{ completedAt: 'asc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
+      },
     },
   });
   if (!opp) return null;
