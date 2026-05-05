@@ -54,6 +54,11 @@ model User {
   updatedSharedContextVersions SharedContextVersion[] @relation("SharedContextVersionUpdater")
   createdSharedContextLinks    SharedContextLink[]    @relation("SharedContextLinkCreator")
 
+  // Puntos de control (checkpoints) en oportunidades
+  createdCheckpoints           OpportunityCheckpoint[] @relation("CheckpointCreator")
+  assignedCheckpoints          OpportunityCheckpoint[] @relation("CheckpointAssignee")
+  completedCheckpoints         OpportunityCheckpoint[] @relation("CheckpointCompleter")
+
   @@index([email])
 }
 
@@ -494,6 +499,7 @@ model Opportunity {
   activities          Activity[]
   tasks               Task[]
   customFields        CustomFieldValue[] @relation("OpportunityCustomFields")
+  checkpoints         OpportunityCheckpoint[]
 
   campaignId          String?
   campaign            Campaign?         @relation("CampaignOpportunities", fields: [campaignId], references: [id], onDelete: SetNull)
@@ -1224,6 +1230,58 @@ model IntegrationMapping {
 }
 
 /// One row per sync invocation. Useful for showing history/last-run/errors.
+// ==================== Puntos de control / Checkpoints ====================
+// Hitos que el equipo agenda en una oportunidad para no perder de vista
+// fechas críticas: demos confirmadas, deadlines de propuesta, decisiones
+// del cliente, revisiones internas. Cada checkpoint tiene un dueño,
+// fecha objetivo y estado (pendiente / completado / vencido).
+
+model OpportunityCheckpoint {
+  id            String        @id @default(cuid())
+  opportunityId String
+  opportunity   Opportunity   @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  label         String
+  description   String?       @db.Text
+  type          CheckpointType @default(MILESTONE)
+  priority      CheckpointPriority @default(NORMAL)
+
+  /// Fecha objetivo. Si es null, el checkpoint es informativo (un hito ya
+  /// alcanzado o uno sin deadline).
+  dueDate       DateTime?
+  /// Cuándo se marcó como completado. null = pendiente.
+  completedAt   DateTime?
+  completedById String?
+  completedBy   User?         @relation("CheckpointCompleter", fields: [completedById], references: [id], onDelete: SetNull)
+
+  /// Owner del checkpoint (puede diferir del owner de la opportunity).
+  assigneeId    String?
+  assignee      User?         @relation("CheckpointAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime      @default(now())
+  createdById   String
+  createdBy     User          @relation("CheckpointCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId])
+  @@index([dueDate])
+  @@index([assigneeId, completedAt])
+}
+
+enum CheckpointType {
+  MILESTONE      /// Hito estructural (Demo confirmada, Propuesta firmada, Kick-off)
+  REVIEW         /// Revisión interna del equipo (no involucra cliente)
+  CLIENT_TOUCH   /// Contacto programado con cliente (call, follow-up)
+  DECISION       /// Fecha de decisión externa (board approval, presupuesto)
+  CUSTOM
+}
+
+enum CheckpointPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
 model SyncRun {
   id            String      @id @default(cuid())
   integrationId String

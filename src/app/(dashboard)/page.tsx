@@ -17,8 +17,23 @@ import {
 import { STAGE_PROBABILITY } from '@/lib/opportunities/stage-rules';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { DashboardTabs } from './components/dashboard-tabs';
+import { AgingTable } from './components/aging-table';
+import { loadAging } from '@/lib/opportunities/aging-queries';
+import {
+  PipelineFunnelChart,
+  ActivityWeeksChart,
+  WinRateChart,
+} from './components/dashboard-charts';
+import {
+  pipelineByStage,
+  activityByWeek,
+  winRateByQuarter,
+} from '@/lib/dashboard/charts';
 
 export const metadata = { title: 'Dashboard' };
+
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function formatMoney(n: number, currency = 'USD'): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M ${currency}`;
@@ -142,7 +157,7 @@ const ACTIVITY_LABEL: Record<string, string> = {
   EVENT_ATTENDED: 'Evento',
 };
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: { searchParams?: SearchParams }) {
   const session = await auth();
   if (!session?.user?.id) return null;
 
@@ -150,19 +165,70 @@ export default async function HomePage() {
   const data = await loadDashboardData(session.user.id, canReadAll);
   const name = session.user.name?.split(' ')[0] ?? 'colega';
 
+  const sp = (await searchParams) ?? {};
+  const view = (Array.isArray(sp.view) ? sp.view[0] : sp.view) ?? 'summary';
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 lg:space-y-8">
-      <div>
-        <p className="font-display text-[11px] font-semibold uppercase tracking-[0.18em] text-sysde-red">
-          Lead Center
-        </p>
-        <h2 className="mt-1 font-display text-2xl font-bold tracking-tight text-sysde-gray sm:text-3xl">
-          Hola, {name}
-        </h2>
-        <p className="mt-1 text-sm text-sysde-mid">
-          Resumen de tu pipeline y actividad reciente.
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="font-display text-[11px] font-semibold uppercase tracking-[0.18em] text-sysde-red">
+            Lead Center
+          </p>
+          <h2 className="mt-1 font-display text-2xl font-bold tracking-tight text-sysde-gray sm:text-3xl">
+            Hola, {name}
+          </h2>
+          <p className="mt-1 text-sm text-sysde-mid">
+            Resumen de tu pipeline y actividad reciente.
+          </p>
+        </div>
+        <DashboardTabs active={view} />
+      </div>
+
+      {view === 'aging' && <AgingViewSection session={session} />}
+      {view === 'charts' && <ChartsViewSection session={session} />}
+      {view === 'summary' && <SummaryViewSection data={data} /> }
+    </div>
+  );
+}
+
+async function AgingViewSection({ session }: { session: import('next-auth').Session }) {
+  const { rows, counts } = await loadAging(session, { ownerScope: 'all', includeStandBy: false });
+  return (
+    <div className="space-y-4">
+      <div className="rounded-md border border-sysde-border bg-white p-4">
+        <p className="text-sm text-sysde-gray">
+          <span className="font-semibold">Reglas de gestión.</span>{' '}
+          Una oportunidad sin gestión (email, llamada, reunión, propuesta…) en las últimas{' '}
+          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs">24h</span> queda en amarillo,{' '}
+          <span className="rounded bg-orange-200 px-1.5 py-0.5 text-xs">48h</span> en naranja, y{' '}
+          <span className="rounded bg-red-200 px-1.5 py-0.5 text-xs">72h+</span> en rojo. Si el cliente
+          es quien hizo la última gestión, el badge azul "responder" indica que la pelota está en tu campo.
         </p>
       </div>
+      <AgingTable rows={rows} counts={counts} defaultLimit={50} />
+    </div>
+  );
+}
+
+async function ChartsViewSection({ session }: { session: import('next-auth').Session }) {
+  const [funnel, weeks, winrate] = await Promise.all([
+    pipelineByStage(session),
+    activityByWeek(session, 12),
+    winRateByQuarter(session, 4),
+  ]);
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="lg:col-span-2"><PipelineFunnelChart data={funnel} /></div>
+      <ActivityWeeksChart data={weeks} />
+      <WinRateChart data={winrate} />
+    </div>
+  );
+}
+
+function SummaryViewSection({ data }: { data: Awaited<ReturnType<typeof loadDashboardData>> }) {
+  return (
+    <>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard
@@ -300,7 +366,7 @@ export default async function HomePage() {
           </div>
         </Card>
       </div>
-    </div>
+    </>
   );
 }
 
