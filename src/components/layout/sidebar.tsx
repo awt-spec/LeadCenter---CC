@@ -17,6 +17,7 @@ import {
   Menu,
   Plug,
   Flame,
+  Zap,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -32,6 +33,7 @@ type NavItem = {
 
 const PRIMARY_NAV: NavItem[] = [
   { label: 'Home', href: '/', icon: LayoutDashboard },
+  { label: 'Sprint', href: '/sprint', icon: Zap },
   { label: 'Inbox', href: '/inbox', icon: Inbox },
   { label: 'Base de datos', href: '/contacts', icon: Users },
   { label: 'Cuentas', href: '/accounts', icon: Building2 },

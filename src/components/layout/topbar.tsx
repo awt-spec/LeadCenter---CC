@@ -14,6 +14,7 @@ const TITLES: Record<string, string> = {
   '/opportunities': 'Oportunidades',
   '/pipeline': 'Pipeline',
   '/heatmap': 'Mapa de calor',
+  '/sprint': 'Sprint',
   '/reports': 'Reportes',
   '/activities': 'Actividad',
   '/inbox': 'Inbox',
