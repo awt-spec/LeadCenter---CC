@@ -350,7 +350,7 @@ export async function loadBDSprint(session: Session): Promise<{
 }
 
 // ─────────────────────────────────────────────────────
-// Activity audit per user
+// Activity audit per user — extended con cuentas gestionadas y tiempo estimado.
 
 export interface AuditDayRow {
   date: string;
@@ -360,15 +360,75 @@ export interface AuditDayRow {
   notes: number;
   tasks: number;
   total: number;
+  /// Minutos de trabajo estimado para este día (suma duraciones reales o
+  /// estimaciones por tipo de actividad si la duración está vacía).
+  estimatedMinutes: number;
+}
+
+export interface AuditAccountTouched {
+  accountId: string;
+  accountName: string;
+  count: number;
+  lastTouchedAt: Date;
+}
+
+export interface AuditTypeBreakdown {
+  emailsSent: number;
+  emailsReceived: number;
+  calls: number;
+  meetings: number;
+  demos: number;
+  proposals: number;
+  notes: number;
+  tasksCompleted: number;
+  stageChanges: number;
+  other: number;
 }
 
 export interface AuditUser {
   id: string;
   name: string;
   email: string;
+  /// Total activities en la ventana entera.
+  total: number;
+  /// Activities desde el lunes UTC.
   totalThisWeek: number;
+  /// Cuentas distintas que tocó.
+  uniqueAccountsTouched: number;
+  /// Tiempo estimado en minutos en la ventana.
+  estimatedMinutesTotal: number;
+  /// Tiempo estimado esta semana en minutos.
+  estimatedMinutesThisWeek: number;
+  /// Tareas completadas en la ventana.
+  tasksCompleted: number;
+  /// Top 8 cuentas más tocadas.
+  topAccounts: AuditAccountTouched[];
+  /// Breakdown completo por tipo (en la ventana).
+  breakdown: AuditTypeBreakdown;
+  /// Granularidad diaria.
   days: AuditDayRow[];
 }
+
+/// Estimaciones de duración cuando el usuario no la registró.
+/// Heurísticas conservadoras — el equipo puede ajustar editando individuales.
+const DURATION_DEFAULTS_MIN: Record<string, number> = {
+  EMAIL_SENT: 6,
+  EMAIL_RECEIVED: 2,
+  CALL: 18,
+  WHATSAPP: 5,
+  MEETING: 45,
+  DEMO: 60,
+  PROPOSAL_SENT: 25,
+  MATERIAL_SENT: 8,
+  LINKEDIN_MESSAGE: 4,
+  INTERNAL_NOTE: 3,
+  TASK: 15,
+  STAGE_CHANGE: 1,
+  CONTACT_LINKED: 1,
+  STATUS_CHANGE: 1,
+  FILE_SHARED: 4,
+  EVENT_ATTENDED: 90,
+};
 
 interface RawAuditRow {
   user_id: string;
@@ -377,19 +437,36 @@ interface RawAuditRow {
   day: Date;
   type: string;
   count: bigint;
+  duration_sum: number | null;
+}
+
+interface RawAccountTouched {
+  user_id: string;
+  account_id: string;
+  account_name: string;
+  count: bigint;
+  last_touched_at: Date;
+}
+
+interface RawTaskCompleted {
+  user_id: string;
+  count: bigint;
 }
 
 /// Per-user activity audit for the last `days` days.
 export async function loadAudit(days = 14): Promise<AuditUser[]> {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   const monday = thisMondayUtc();
+
+  // 1. Daily activity counts + duration sum, per user + type
   const rows = await prisma.$queryRawUnsafe<RawAuditRow[]>(
     `SELECT a."createdById" AS user_id,
             u."name" AS user_name,
             u."email" AS user_email,
             date_trunc('day', a."occurredAt" AT TIME ZONE 'UTC')::date AS day,
             a."type"::text AS type,
-            COUNT(*)::bigint AS count
+            COUNT(*)::bigint AS count,
+            SUM(COALESCE(a."durationMinutes", 0))::int AS duration_sum
        FROM "Activity" a
        INNER JOIN "User" u ON u."id" = a."createdById"
        WHERE a."occurredAt" >= $1
@@ -399,29 +476,133 @@ export async function loadAudit(days = 14): Promise<AuditUser[]> {
     since
   );
 
+  // 2. Top accounts touched per user (limit 8 each)
+  const accountRows = await prisma.$queryRawUnsafe<RawAccountTouched[]>(
+    `WITH ranked AS (
+       SELECT a."createdById" AS user_id,
+              a."accountId" AS account_id,
+              acc."name" AS account_name,
+              COUNT(*) AS count,
+              MAX(a."occurredAt") AS last_touched_at,
+              ROW_NUMBER() OVER (PARTITION BY a."createdById" ORDER BY COUNT(*) DESC) AS rn
+         FROM "Activity" a
+         INNER JOIN "Account" acc ON acc."id" = a."accountId"
+         WHERE a."occurredAt" >= $1
+           AND a."accountId" IS NOT NULL
+         GROUP BY a."createdById", a."accountId", acc."name"
+     )
+     SELECT user_id, account_id, account_name, count::bigint, last_touched_at
+       FROM ranked
+       WHERE rn <= 8
+       ORDER BY user_id, count DESC`,
+    since
+  );
+
+  // 3. Distinct accounts touched per user
+  const distinctAccountRows = await prisma.$queryRawUnsafe<{ user_id: string; distinct_count: bigint }[]>(
+    `SELECT a."createdById" AS user_id,
+            COUNT(DISTINCT a."accountId")::bigint AS distinct_count
+       FROM "Activity" a
+       WHERE a."occurredAt" >= $1
+         AND a."accountId" IS NOT NULL
+       GROUP BY a."createdById"`,
+    since
+  );
+
+  // 4. Tasks completed per user
+  const tasksRows = await prisma.$queryRawUnsafe<RawTaskCompleted[]>(
+    `SELECT t."createdById" AS user_id,
+            COUNT(*)::bigint AS count
+       FROM "Task" t
+       WHERE t."completedAt" >= $1
+       GROUP BY t."createdById"`,
+    since
+  );
+
+  // ── Build per-user results ──────────────────────────────────
   const byUser = new Map<string, AuditUser>();
+
+  // Init users with their activity rows
   for (const r of rows) {
     let u = byUser.get(r.user_id);
     if (!u) {
-      u = { id: r.user_id, name: r.user_name, email: r.user_email, totalThisWeek: 0, days: [] };
+      u = {
+        id: r.user_id,
+        name: r.user_name,
+        email: r.user_email,
+        total: 0,
+        totalThisWeek: 0,
+        uniqueAccountsTouched: 0,
+        estimatedMinutesTotal: 0,
+        estimatedMinutesThisWeek: 0,
+        tasksCompleted: 0,
+        topAccounts: [],
+        breakdown: {
+          emailsSent: 0, emailsReceived: 0, calls: 0, meetings: 0,
+          demos: 0, proposals: 0, notes: 0, tasksCompleted: 0,
+          stageChanges: 0, other: 0,
+        },
+        days: [],
+      };
       byUser.set(r.user_id, u);
     }
     const dayKey = r.day.toISOString().slice(0, 10);
     let d = u.days.find((x) => x.date === dayKey);
     if (!d) {
-      d = { date: dayKey, emails: 0, calls: 0, meetings: 0, notes: 0, tasks: 0, total: 0 };
+      d = { date: dayKey, emails: 0, calls: 0, meetings: 0, notes: 0, tasks: 0, total: 0, estimatedMinutes: 0 };
       u.days.push(d);
     }
     const c = Number(r.count);
+    const realDuration = Number(r.duration_sum ?? 0);
+    const estimated = realDuration > 0 ? realDuration : c * (DURATION_DEFAULTS_MIN[r.type] ?? 5);
     d.total += c;
-    switch (r.type) {
-      case 'EMAIL_SENT': case 'EMAIL_RECEIVED': d.emails += c; break;
-      case 'CALL': case 'WHATSAPP': d.calls += c; break;
-      case 'MEETING': case 'DEMO': d.meetings += c; break;
-      case 'INTERNAL_NOTE': d.notes += c; break;
-      case 'TASK': d.tasks += c; break;
+    d.estimatedMinutes += estimated;
+    u.total += c;
+    u.estimatedMinutesTotal += estimated;
+    if (r.day >= monday) {
+      u.totalThisWeek += c;
+      u.estimatedMinutesThisWeek += estimated;
     }
-    if (r.day >= monday) u.totalThisWeek += c;
+    switch (r.type) {
+      case 'EMAIL_SENT': d.emails += c; u.breakdown.emailsSent += c; break;
+      case 'EMAIL_RECEIVED': d.emails += c; u.breakdown.emailsReceived += c; break;
+      case 'CALL': d.calls += c; u.breakdown.calls += c; break;
+      case 'WHATSAPP': d.calls += c; u.breakdown.calls += c; break;
+      case 'MEETING': d.meetings += c; u.breakdown.meetings += c; break;
+      case 'DEMO': d.meetings += c; u.breakdown.demos += c; break;
+      case 'INTERNAL_NOTE': d.notes += c; u.breakdown.notes += c; break;
+      case 'PROPOSAL_SENT': u.breakdown.proposals += c; break;
+      case 'STAGE_CHANGE': u.breakdown.stageChanges += c; break;
+      case 'TASK': d.tasks += c; break;
+      default: u.breakdown.other += c;
+    }
+  }
+
+  // Distinct accounts touched
+  for (const r of distinctAccountRows) {
+    const u = byUser.get(r.user_id);
+    if (u) u.uniqueAccountsTouched = Number(r.distinct_count);
+  }
+
+  // Top accounts per user
+  for (const r of accountRows) {
+    const u = byUser.get(r.user_id);
+    if (!u) continue;
+    u.topAccounts.push({
+      accountId: r.account_id,
+      accountName: r.account_name,
+      count: Number(r.count),
+      lastTouchedAt: r.last_touched_at,
+    });
+  }
+
+  // Tasks completed
+  for (const r of tasksRows) {
+    const u = byUser.get(r.user_id);
+    if (u) {
+      u.tasksCompleted = Number(r.count);
+      u.breakdown.tasksCompleted = Number(r.count);
+    }
   }
 
   return [...byUser.values()].sort((a, b) => b.totalThisWeek - a.totalThisWeek);
