@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Save, Loader2, Target, ListChecks, AlertTriangle, Compass } from 'lucide-react';
+import { Save, Loader2, Target, ListChecks, AlertTriangle, Compass, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ export function CocStrategyForm({ accountId, initial }: { accountId: string; ini
   const [risks, setRisks] = useState(initial.risks ?? '');
   const [nextSteps, setNextSteps] = useState(initial.nextSteps ?? '');
   const [pending, start] = useTransition();
+  const [drafting, setDrafting] = useState(false);
   const [dirty, setDirty] = useState(false);
 
   function markDirty<T>(setter: (v: T) => void) {
@@ -52,14 +53,65 @@ export function CocStrategyForm({ accountId, initial }: { accountId: string; ini
     });
   }
 
+  /// Pulls tasks + emails + opps + activities + existing C.O.C. content and asks
+  /// Claude to draft the strategy. Result is loaded into the form (NOT auto-saved)
+  /// so the user can review and edit before pressing "Guardar".
+  async function onDraftWithAI() {
+    const hasContent = (headline + strategy + goals + risks + nextSteps).trim().length > 0;
+    if (hasContent && !confirm('Hay contenido escrito. ¿Lo reemplazo con la versión generada por IA? (podés revisar antes de guardar)')) {
+      return;
+    }
+    setDrafting(true);
+    try {
+      const res = await fetch(`/api/coc/${accountId}/draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: 'strategy' }),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        draft?: { headline: string | null; strategy: string | null; goals: string | null; risks: string | null; nextSteps: string | null };
+      };
+      if (!res.ok || !json.ok || !json.draft) {
+        toast.error(json.error ?? 'Error al generar borrador');
+        return;
+      }
+      setHeadline(json.draft.headline ?? '');
+      setStrategy(json.draft.strategy ?? '');
+      setGoals(json.draft.goals ?? '');
+      setRisks(json.draft.risks ?? '');
+      setNextSteps(json.draft.nextSteps ?? '');
+      setDirty(true);
+      toast.success('Borrador generado — revisá y guardá');
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setDrafting(false);
+    }
+  }
+
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between pb-3">
         <CardTitle className="text-sm">Estrategia compartida</CardTitle>
-        <Button size="sm" onClick={onSave} disabled={pending || !dirty}>
-          {pending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1 h-3.5 w-3.5" />}
-          {dirty ? 'Guardar' : 'Sin cambios'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onDraftWithAI}
+            disabled={drafting || pending}
+            className="gap-1.5 border-sysde-red/30 text-sysde-red hover:bg-sysde-red/5 hover:text-sysde-red"
+            title="Genera un borrador con IA usando tareas, emails, oportunidades y actividades de la cuenta"
+          >
+            {drafting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            {drafting ? 'Analizando…' : 'Generar con IA'}
+          </Button>
+          <Button size="sm" onClick={onSave} disabled={pending || !dirty}>
+            {pending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1 h-3.5 w-3.5" />}
+            {dirty ? 'Guardar' : 'Sin cambios'}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <Field label="Título / encabezado" hint="Una línea que sintetiza el play. Ej. «Migración SAF+ 2026 en BCP — entrar por Riesgos»">

@@ -3,7 +3,7 @@
 import { useState, useTransition, useMemo } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Save, Loader2, Layers, CheckCircle2 } from 'lucide-react';
+import { Save, Loader2, Layers, CheckCircle2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,7 @@ export function CocVersionsEditor({
     return out;
   });
   const [pending, start] = useTransition();
+  const [drafting, setDrafting] = useState<Audience | null>(null);
 
   function setBody(audience: Audience, body: string) {
     setBodies((b) => ({ ...b, [audience]: body }));
@@ -65,6 +66,36 @@ export function CocVersionsEditor({
         toast.error(res.error);
       }
     });
+  }
+
+  /// Generate this audience's body via Claude, using tasks/emails/opps + the
+  /// existing strategy. Loads the result into the textarea (no auto-save) so
+  /// the user can review before persisting.
+  async function onDraftAI(audience: Audience) {
+    if (bodies[audience].trim().length > 0) {
+      const ok = confirm(`Hay contenido en "${AUDIENCE_LABELS[audience]}". ¿Lo reemplazo con la versión IA? (podés revisar antes de guardar)`);
+      if (!ok) return;
+    }
+    setDrafting(audience);
+    try {
+      const res = await fetch(`/api/coc/${accountId}/draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: 'version', audience }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string; draft?: { body: string } };
+      if (!res.ok || !json.ok || !json.draft) {
+        toast.error(json.error ?? 'Error al generar borrador');
+        return;
+      }
+      setBodies((b) => ({ ...b, [audience]: json.draft!.body }));
+      setDirty((d) => ({ ...d, [audience]: true }));
+      toast.success(`Borrador IA listo — revisá y guardá`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setDrafting(null);
+    }
   }
 
   return (
@@ -116,14 +147,31 @@ export function CocVersionsEditor({
                   <span className="text-[11px] text-sysde-mid">
                     {bodies[a].length.toLocaleString('es-MX')} / 20,000 caracteres
                   </span>
-                  <Button size="sm" onClick={() => onSave(a)} disabled={pending || !dirty[a]}>
-                    {pending ? (
-                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Save className="mr-1 h-3.5 w-3.5" />
-                    )}
-                    Guardar {AUDIENCE_LABELS[a]}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onDraftAI(a)}
+                      disabled={drafting !== null || pending}
+                      className="gap-1.5 border-sysde-red/30 text-sysde-red hover:bg-sysde-red/5 hover:text-sysde-red"
+                      title={`Genera el cuerpo de "${AUDIENCE_LABELS[a]}" con IA usando tareas, emails, oportunidades y la estrategia compartida.`}
+                    >
+                      {drafting === a ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3.5 w-3.5" />
+                      )}
+                      {drafting === a ? 'Analizando…' : 'Redactar con IA'}
+                    </Button>
+                    <Button size="sm" onClick={() => onSave(a)} disabled={pending || !dirty[a]}>
+                      {pending ? (
+                        <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Save className="mr-1 h-3.5 w-3.5" />
+                      )}
+                      Guardar {AUDIENCE_LABELS[a]}
+                    </Button>
+                  </div>
                 </div>
               </TabsContent>
             );

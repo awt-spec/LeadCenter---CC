@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Users } from 'lucide-react';
+import { Users, Sparkles } from 'lucide-react';
 import { getSharedContextByAccount } from '@/lib/coc/queries';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CocStrategyForm } from './coc-strategy-form';
@@ -28,6 +28,13 @@ export async function CocPanel({ accountId }: { accountId: string }) {
                 Vista 360 colaborativa. Cualquier miembro de LeadCenter puede leer y aportar — la
                 estrategia compartida abajo es para todo el equipo, las versiones por audiencia
                 ajustan el mensaje a quién va dirigido.
+              </p>
+              <p className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-sysde-mid">
+                <Sparkles className="h-3 w-3 text-sysde-red" />
+                <span>
+                  La IA puede redactar cualquier sección leyendo tareas, emails, oportunidades
+                  pasadas y abiertas, contactos y actividad reciente.
+                </span>
               </p>
             </div>
             {ctx.exists && ctx.updatedAt && (
