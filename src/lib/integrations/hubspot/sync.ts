@@ -370,8 +370,52 @@ async function syncContacts(integrationId: string, importerUserId: string, state
   const props = ['email', 'firstname', 'lastname', 'jobtitle', 'phone', 'mobilephone', 'company', 'website', 'country', 'city', 'hs_linkedin_url', 'hs_lead_status'];
   const associations = ['companies'];
   let cursor: SyncState = state;
-  for await (const { results, nextAfter } of listObjects(integrationId, 'contacts', { properties: props, associations, limit: 100, startAfter: cursor.cursors?.contacts })) {
+
+  // Search-ahead optimisation. Use search API to skip directly to contacts
+  // with hs_object_id > MAX_LC_externalId — same pattern as the emails phase.
+  // We use it whenever there's no resumable cursor; if a cursor exists we
+  // honor list-mode for resumability. The previous list-mode-only code was
+  // cycling through already-mapped contacts via HubSpot's offset pagination
+  // and never reaching the unmapped tail.
+  const useSearch = !cursor.cursors?.contacts;
+  let maxMappedId = '0';
+  if (useSearch) {
+    const rows = await prisma.$queryRawUnsafe<Array<{ max: string | null }>>(
+      `SELECT MAX(CAST("externalId" AS BIGINT))::text AS max
+       FROM "IntegrationMapping"
+       WHERE "integrationId" = $1 AND "externalType" = 'contact'`,
+      integrationId
+    );
+    if (rows[0]?.max && rows[0].max !== '0') maxMappedId = rows[0].max;
+  }
+  const inSearchMode = useSearch && maxMappedId !== '0';
+
+  let iter: AsyncIterator<{ results: Array<{ id: string; properties: Record<string, string | null>; associations?: { companies?: { results: Array<{ id: string }> } } }>; nextAfter: string | null }>;
+  if (inSearchMode) {
+    iter = searchObjectsAfterId(integrationId, 'contacts', maxMappedId, {
+      properties: props,
+      associations,
+      limit: 100,
+    }) as AsyncIterator<{ results: Array<{ id: string; properties: Record<string, string | null>; associations?: { companies?: { results: Array<{ id: string }> } } }>; nextAfter: string | null }>;
+  } else {
+    iter = listObjects(integrationId, 'contacts', {
+      properties: props,
+      associations,
+      limit: 100,
+      startAfter: cursor.cursors?.contacts,
+    }) as AsyncIterator<{ results: Array<{ id: string; properties: Record<string, string | null>; associations?: { companies?: { results: Array<{ id: string }> } } }>; nextAfter: string | null }>;
+  }
+
+  for (;;) {
     if (Date.now() > deadline) { stats.truncated = true; return cursor; }
+    let next: IteratorResult<{ results: Array<{ id: string; properties: Record<string, string | null>; associations?: { companies?: { results: Array<{ id: string }> } } }>; nextAfter: string | null }>;
+    try {
+      next = await iter.next();
+    } catch (e) {
+      throw e;
+    }
+    if (next.done) break;
+    const { results, nextAfter } = next.value;
     await parallelMap(results, PARALLELISM, (c) => safeProcess(c, async (cItem) => {
       const cc = cItem as { id: string; properties: Record<string, string | null>; associations?: { companies?: { results: Array<{ id: string }> } } };
       const companyHsId = cc.associations?.companies?.results?.[0]?.id;
@@ -418,8 +462,11 @@ async function syncContacts(integrationId: string, importerUserId: string, state
         }
       }
     }, stats, 'contact'));
-    cursor = { ...cursor, cursors: { ...(cursor.cursors ?? {}), contacts: nextAfter ?? undefined } };
-    await saveState(integrationId, cursor);
+    if (!inSearchMode) {
+      // List mode: persist cursor so next tick resumes from the same offset.
+      cursor = { ...cursor, cursors: { ...(cursor.cursors ?? {}), contacts: nextAfter ?? undefined } };
+      await saveState(integrationId, cursor);
+    }
     if (!nextAfter) break;
   }
   cursor = {
