@@ -44,7 +44,7 @@ export async function listAccounts(session: Session, filters: AccountFilters) {
     [filters.sortBy]: filters.sortDir,
   };
 
-  const [rows, total] = await Promise.all([
+  const [rawRows, total] = await Promise.all([
     prisma.account.findMany({
       where,
       select: {
@@ -60,10 +60,6 @@ export async function listAccounts(session: Session, filters: AccountFilters) {
         updatedAt: true,
         owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
         _count: { select: { contacts: true, opportunities: true } },
-        opportunities: {
-          where: { status: 'OPEN' },
-          select: { estimatedValue: true },
-        },
       },
       orderBy,
       skip: (filters.page - 1) * filters.pageSize,
@@ -71,6 +67,31 @@ export async function listAccounts(session: Session, filters: AccountFilters) {
     }),
     prisma.account.count({ where }),
   ]);
+
+  // Pipeline total por cuenta — single GROUP BY contra Opportunity en
+  // lugar de un subquery por cada row. Con 50 cuentas × N opps cada una
+  // pasamos de 50 round-trips a 1.
+  const accountIds = rawRows.map((r) => r.id);
+  const pipelineSums =
+    accountIds.length === 0
+      ? []
+      : await prisma.opportunity.groupBy({
+          by: ['accountId'],
+          where: { accountId: { in: accountIds }, status: 'OPEN' },
+          _sum: { estimatedValue: true },
+        });
+  const pipelineByAccount = new Map(
+    pipelineSums.map((p) => [p.accountId, Number(p._sum.estimatedValue ?? 0)])
+  );
+
+  // Re-emit rows in the shape the page expects (with `opportunities[]`)
+  // so we don't have to refactor the consumer.
+  const rows = rawRows.map((r) => ({
+    ...r,
+    opportunities: pipelineByAccount.has(r.id)
+      ? [{ estimatedValue: pipelineByAccount.get(r.id)! }]
+      : [],
+  }));
 
   return { rows, total };
 }
