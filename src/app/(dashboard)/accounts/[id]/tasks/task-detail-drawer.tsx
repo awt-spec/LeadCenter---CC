@@ -27,7 +27,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -230,8 +230,10 @@ export function TaskDetailDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full overflow-y-auto !max-w-[min(960px,95vw)] p-0"
+        className="w-full overflow-y-auto p-0 sm:max-w-3xl lg:max-w-4xl"
       >
+        {/* Hidden title for screen readers — Radix Dialog requires a DialogTitle */}
+        <SheetTitle className="sr-only">{task?.title ?? 'Detalle de tarea'}</SheetTitle>
         {loading || !task ? (
           <div className="grid h-[80vh] place-items-center text-sm text-sysde-mid">Cargando…</div>
         ) : (
@@ -864,36 +866,40 @@ function CommentRow({
 // Helpers
 
 function hydrate(raw: Record<string, unknown>): TaskDetail {
-  const t = raw as unknown as {
+  const t = raw as unknown as Partial<{
     id: string; title: string; description: string | null;
     status: TaskStatus; priority: TaskPriority;
     dueDate: string | null; createdAt: string;
     tags: string[]; color: string | null;
-    createdBy: { id: string; name: string };
+    createdBy: { id: string; name: string } | null;
     assignees: { user: { id: string; name: string; avatarUrl: string | null } }[];
     subtasks: { id: string; title: string; status: TaskStatus }[];
     comments: { id: string; body: string; createdAt: string; user: { id: string; name: string; avatarUrl: string | null } }[];
     attachments: { id: string; fileName: string; fileUrl: string; uploadedAt: string; uploadedBy: { id: string; name: string } }[];
-    blockedBy?: DepLink[];
-    blocking?: DepLink[];
-  };
+    blockedBy: DepLink[];
+    blocking: DepLink[];
+  }>;
   return {
-    id: t.id,
-    title: t.title,
-    description: t.description,
-    status: t.status,
-    priority: t.priority,
-    tags: t.tags,
+    id: t.id ?? '',
+    title: t.title ?? '',
+    description: t.description ?? null,
+    status: (t.status ?? 'TODO') as TaskStatus,
+    priority: (t.priority ?? 'NORMAL') as TaskPriority,
+    tags: Array.isArray(t.tags) ? t.tags : [],
     color: t.color ?? null,
-    createdBy: t.createdBy,
-    assignees: t.assignees,
-    subtasks: t.subtasks,
-    createdAt: new Date(t.createdAt),
+    createdBy: t.createdBy ?? { id: '', name: '—' },
+    assignees: Array.isArray(t.assignees) ? t.assignees : [],
+    subtasks: Array.isArray(t.subtasks) ? t.subtasks : [],
+    createdAt: t.createdAt ? new Date(t.createdAt) : new Date(),
     dueDate: t.dueDate ? new Date(t.dueDate) : null,
-    blockedBy: t.blockedBy ?? [],
-    blocking: t.blocking ?? [],
-    comments: t.comments.map((c) => ({ ...c, createdAt: new Date(c.createdAt) })),
-    attachments: t.attachments.map((a) => ({ ...a, uploadedAt: new Date(a.uploadedAt) })),
+    blockedBy: Array.isArray(t.blockedBy) ? t.blockedBy : [],
+    blocking: Array.isArray(t.blocking) ? t.blocking : [],
+    comments: Array.isArray(t.comments)
+      ? t.comments.map((c) => ({ ...c, createdAt: new Date(c.createdAt) }))
+      : [],
+    attachments: Array.isArray(t.attachments)
+      ? t.attachments.map((a) => ({ ...a, uploadedAt: new Date(a.uploadedAt) }))
+      : [],
   };
 }
 
