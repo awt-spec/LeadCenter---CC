@@ -2,12 +2,12 @@
   "summary": {
     "totalTasks": 852,
     "uniqueCompanies": 732,
-    "reuseExact": 204,
+    "reuseExact": 202,
     "reuseTokens": 46,
-    "reuseDomain": 312,
+    "reuseDomain": 313,
     "reuseEmailDomain": 6,
     "bucketedGeneric": 51,
-    "skipped": 233,
+    "skipped": 234,
     "companiesWithMultipleOpps": [
       {
         "groupKey": "__generic__",
@@ -235,7 +235,7 @@
         "groupKey": "cmootcwuv01jt1417hvprhftu",
         "companyName": "Bancolombia",
         "count": 2,
-        "accountName": "Bancolombia"
+        "accountName": "Bancolombia S.A."
       },
       {
         "groupKey": "cmoo5dkip00f710vkdhahucc7",
@@ -2838,13 +2838,10 @@
       "asanaName": "UsaCredit",
       "companyName": "UsaCredit",
       "action": {
-        "type": "reuse",
-        "accountId": "cmoos0gvl03rh7p9m8rjj4z9g",
-        "matchedBy": "domain",
-        "accountName": "USACREDIT S.A. de C.V. SOFOM ENR",
-        "confidence": 0.9
+        "type": "skip",
+        "reason": "no LC account match (name/tokens/domain)"
       },
-      "groupKey": "cmoos0gvl03rh7p9m8rjj4z9g"
+      "groupKey": "skip:1209409763506940"
     },
     {
       "taskGid": "1209283995334730",
@@ -9176,9 +9173,9 @@
       "action": {
         "type": "reuse",
         "accountId": "cmootcwuv01jt1417hvprhftu",
-        "matchedBy": "exact",
-        "accountName": "Bancolombia",
-        "confidence": 1
+        "matchedBy": "domain",
+        "accountName": "Bancolombia S.A.",
+        "confidence": 0.9
       },
       "groupKey": "cmootcwuv01jt1417hvprhftu"
     },
@@ -9804,9 +9801,9 @@
       "action": {
         "type": "reuse",
         "accountId": "cmootcwuv01jt1417hvprhftu",
-        "matchedBy": "exact",
-        "accountName": "Bancolombia",
-        "confidence": 1
+        "matchedBy": "domain",
+        "accountName": "Bancolombia S.A.",
+        "confidence": 0.9
       },
       "groupKey": "cmootcwuv01jt1417hvprhftu"
     },
