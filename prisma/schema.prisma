@@ -48,6 +48,12 @@ model User {
   connectedIntegrations  Integration[]   @relation("IntegrationConnector")
   triggeredSyncRuns      SyncRun[]       @relation("SyncTrigger")
 
+  // C.O.C. — Contexto Organizacional Compartido
+  createdSharedContexts        SharedContext[]        @relation("SharedContextCreator")
+  updatedSharedContexts        SharedContext[]        @relation("SharedContextUpdater")
+  updatedSharedContextVersions SharedContextVersion[] @relation("SharedContextVersionUpdater")
+  createdSharedContextLinks    SharedContextLink[]    @relation("SharedContextLinkCreator")
+
   @@index([email])
 }
 
@@ -181,6 +187,9 @@ model Account {
   activities       Activity[]
   tasks            Task[]
   customFields     CustomFieldValue[] @relation("AccountCustomFields")
+  /// Contexto Organizacional Compartido — vista 360 visible a todo el equipo.
+  /// Una sola entidad por cuenta, con múltiples versiones (audiencias) + recursos.
+  sharedContext    SharedContext?
 
   /// Generated tsvector for full-text search. Maintained by Postgres.
   search_vector    Unsupported("tsvector")?
@@ -1234,4 +1243,117 @@ model SyncRun {
   triggeredBy   User?       @relation("SyncTrigger", fields: [triggeredById], references: [id], onDelete: SetNull)
 
   @@index([integrationId, startedAt])
+}
+
+// ==================== C.O.C. — Contexto Organizacional Compartido ====================
+// Vista 360 colaborativa por cuenta. Cualquier participante de LeadCenter puede
+// leer/editar. Tiene un bloque de estrategia compartida + versiones por audiencia
+// (qué le contamos al prospecto, al área financiera, al técnico, etc.) + un
+// repositorio de recursos externos (Lovable, Slides, Figma, Notion, Loom…).
+
+model SharedContext {
+  id           String    @id @default(cuid())
+
+  accountId    String    @unique
+  account      Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  /// Título corto que identifica esta narrativa (ej. "Estrategia 2026 para BCP").
+  headline     String?
+  /// El "play" — cómo vamos a ganar esta cuenta.
+  strategy     String?   @db.Text
+  /// Outcomes esperados, KPIs, fechas hito.
+  goals        String?   @db.Text
+  /// Riesgos identificados (técnicos, comerciales, políticos).
+  risks        String?   @db.Text
+  /// Próximos pasos que vamos a ejecutar.
+  nextSteps    String?   @db.Text
+
+  status       SharedContextStatus @default(ACTIVE)
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  createdById  String?
+  createdBy    User?     @relation("SharedContextCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById  String?
+  updatedBy    User?     @relation("SharedContextUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  versions     SharedContextVersion[]
+  links        SharedContextLink[]
+
+  @@index([accountId])
+}
+
+/// Una versión por audiencia (PROSPECTO, INTERNO, FINANZAS, TÉCNICO, EJECUTIVO).
+/// La unique [contextId, audience] evita duplicados — si necesitas ramificar,
+/// duplica el contenido en otra audiencia o crea una segunda SharedContext.
+model SharedContextVersion {
+  id           String    @id @default(cuid())
+  contextId    String
+  context      SharedContext @relation(fields: [contextId], references: [id], onDelete: Cascade)
+
+  audience     ContextAudience
+
+  /// Cuerpo libre en markdown / texto plano. La UI no usa tiptap acá: editor
+  /// minimalista para que cualquiera del equipo pueda escribir sin fricción.
+  body         String?   @db.Text
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  updatedById  String?
+  updatedBy    User?     @relation("SharedContextVersionUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([contextId, audience])
+  @@index([contextId])
+}
+
+/// Recursos externos asociados al contexto: Lovable, Slides, Figma, Notion, Loom…
+/// El tipo se autodetecta desde el dominio en /api/coc/preview.
+model SharedContextLink {
+  id           String    @id @default(cuid())
+  contextId    String
+  context      SharedContext @relation(fields: [contextId], references: [id], onDelete: Cascade)
+
+  url          String
+  title        String
+  description  String?   @db.Text
+  type         ContextLinkType @default(OTHER)
+  /// Si está poblado, este recurso sólo aparece cuando se filtra por esa audiencia.
+  audience     ContextAudience?
+
+  domain       String?
+  thumbnail    String?
+
+  /// Orden en la UI (drag-reorder a futuro).
+  position     Int       @default(0)
+
+  createdAt    DateTime  @default(now())
+  createdById  String?
+  createdBy    User?     @relation("SharedContextLinkCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([contextId])
+}
+
+enum SharedContextStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ContextAudience {
+  PROSPECT     // Lo que le contaríamos al cliente
+  INTERNAL     // Versión interna completa (default)
+  FINANCE      // Para conversaciones con CFO/Finanzas
+  TECHNICAL    // Para áreas técnicas/integración
+  EXECUTIVE    // 1-pager ejecutivo
+}
+
+enum ContextLinkType {
+  PRESENTATION
+  DOCUMENT
+  SPREADSHEET
+  LOVABLE
+  FIGMA
+  VIDEO
+  WEBSITE
+  REPO
+  OTHER
 }

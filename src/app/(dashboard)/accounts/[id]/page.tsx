@@ -20,6 +20,7 @@ import { TasksTabAsync, TasksTabSkeleton } from './tabs/tasks-tab-async';
 import { ActivityTabAsync, ActivityTabSkeleton } from './tabs/activity-tab-async';
 import { CustomFieldsCard } from '@/components/custom-fields/custom-fields-card';
 import { AccountSummaryCard } from '@/components/ai/account-summary-card';
+import { CocPanel } from '@/components/coc/coc-panel';
 
 // Aggressive page-level caching. Hits inside the window are served
 // from Next's data cache without touching Prisma/Supabase. Mutations
@@ -190,6 +191,9 @@ export default async function AccountDetailPage({
       <Tabs defaultValue="overview" className="mt-6">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="coc" className="gap-1.5">
+            <span className="text-sysde-red">C.O.C.</span>
+          </TabsTrigger>
           <TabsTrigger value="tasks">Tareas {tasksCount > 0 && `(${tasksCount})`}</TabsTrigger>
           <TabsTrigger value="activity">Actividad</TabsTrigger>
           <TabsTrigger value="contacts">Contactos</TabsTrigger>
@@ -248,6 +252,12 @@ export default async function AccountDetailPage({
           )}
 
           <CustomFieldsCard entity="ACCOUNT" recordId={account.id} />
+        </TabsContent>
+
+        <TabsContent value="coc">
+          <Suspense fallback={<div className="rounded-md border border-sysde-border bg-sysde-bg p-10 text-center text-sm text-sysde-mid">Cargando contexto compartido…</div>}>
+            <CocPanel accountId={account.id} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="tasks">
