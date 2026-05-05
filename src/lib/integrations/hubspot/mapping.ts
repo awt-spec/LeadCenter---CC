@@ -2,6 +2,7 @@
 // Kept pure (no DB access) so they're easy to unit test.
 
 import type { Prisma, OpportunityStage, OpportunityStatus, ContactStatus, AccountStatus, AccountPriority } from '@prisma/client';
+import { HUBSPOT_STAGE_ID_TO_LC } from '@/lib/shared/labels';
 
 type HsProps = Record<string, string | null>;
 
@@ -105,7 +106,10 @@ export function mapDealToOpportunity(
   pipelineLabelByStageId: Map<string, { label: string; probability: number }>
 ): Prisma.OpportunityUncheckedCreateInput {
   const stageInfo = pipelineLabelByStageId.get(String(props.dealstage ?? ''));
-  const stage = pickOppStage(stageInfo?.label ?? props.dealstage ?? null);
+  // Prefer exact id match against the SYSDE pipelines (Pipeline de ventas
+  // + Pipeline EW). Fall back to label-based heuristics for unknown ids.
+  const stageById = HUBSPOT_STAGE_ID_TO_LC[String(props.dealstage ?? '')];
+  const stage = stageById ?? pickOppStage(stageInfo?.label ?? props.dealstage ?? null);
   const status: OpportunityStatus = stage === 'WON' ? 'WON' : stage === 'LOST' ? 'LOST' : 'OPEN';
   const amount = props.amount ? Number(props.amount) : null;
   const probability = Number.isFinite(stageInfo?.probability) ? stageInfo!.probability : oppProb(stage);

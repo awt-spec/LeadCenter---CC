@@ -13,6 +13,7 @@ const TITLES: Record<string, string> = {
   '/accounts': 'Cuentas',
   '/opportunities': 'Oportunidades',
   '/pipeline': 'Pipeline',
+  '/heatmap': 'Mapa de calor',
   '/reports': 'Reportes',
   '/activities': 'Actividad',
   '/inbox': 'Inbox',

@@ -16,6 +16,7 @@ import {
   Megaphone,
   Menu,
   Plug,
+  Flame,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -36,6 +37,7 @@ const PRIMARY_NAV: NavItem[] = [
   { label: 'Cuentas', href: '/accounts', icon: Building2 },
   { label: 'Oportunidades', href: '/opportunities', icon: Briefcase },
   { label: 'Pipeline', href: '/pipeline', icon: Kanban },
+  { label: 'Mapa de calor', href: '/heatmap', icon: Flame },
   { label: 'Campañas', href: '/campaigns', icon: Megaphone },
   { label: 'Actividad', href: '/activities', icon: ActivityIcon },
   { label: 'Reportes', href: '/reports', icon: BarChart3 },
