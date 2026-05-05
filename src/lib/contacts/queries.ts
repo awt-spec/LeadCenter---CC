@@ -66,7 +66,9 @@ export async function listContacts(session: Session, filters: ContactFilters) {
       where,
       include: {
         owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
-        tags: { include: { tag: true } },
+        // La tabla muestra 3 tags + "+N más"; capping the include evita
+        // fetch de payloads grandes para contactos con 10+ tags.
+        tags: { include: { tag: true }, take: 5 },
       },
       orderBy,
       skip: (filters.page - 1) * filters.pageSize,
