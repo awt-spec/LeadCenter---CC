@@ -16,6 +16,7 @@ import {
   SegmentDonut,
   EmailFunnel,
 } from './charts';
+import { Extractor } from './components/extractor';
 import {
   getPipelineSummary,
   getStageVelocity,
@@ -73,7 +74,7 @@ async function loadDashboard(scopeJson: string, period: Period) {
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; tab?: string }>;
 }) {
   const session = await auth();
   if (!session?.user?.id) return null;
@@ -83,6 +84,7 @@ export default async function ReportsPage({
 
   const sp = await searchParams;
   const period: Period = (PERIODS.find((p) => p.key === sp.period)?.key ?? '90d') as Period;
+  const tab = sp.tab === 'extractor' ? 'extractor' : 'overview';
 
   const canAll = can(session, 'reports:read:all') || can(session, 'opportunities:read:all');
   const scope: Prisma.OpportunityWhereInput = canAll ? {} : { ownerId: session.user.id };
@@ -109,22 +111,67 @@ export default async function ReportsPage({
             Pipeline, conversión, velocidad y engagement.
           </p>
         </div>
-        <div className="flex items-center gap-1 rounded-lg border border-sysde-border bg-white p-1 text-xs">
-          {PERIODS.map((p) => (
-            <Link
-              key={p.key}
-              href={`/reports?period=${p.key}`}
-              className={
-                period === p.key
-                  ? 'rounded-md bg-sysde-red px-3 py-1.5 font-medium text-white'
-                  : 'rounded-md px-3 py-1.5 text-sysde-mid hover:text-sysde-gray'
-              }
-            >
-              {p.label}
-            </Link>
-          ))}
+        <div className="flex items-center gap-2">
+          {tab === 'overview' && (
+            <div className="flex items-center gap-1 rounded-lg border border-sysde-border bg-white p-1 text-xs">
+              {PERIODS.map((p) => (
+                <Link
+                  key={p.key}
+                  href={`/reports?period=${p.key}`}
+                  className={
+                    period === p.key
+                      ? 'rounded-md bg-sysde-red px-3 py-1.5 font-medium text-white'
+                      : 'rounded-md px-3 py-1.5 text-sysde-mid hover:text-sysde-gray'
+                  }
+                >
+                  {p.label}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-1 rounded-lg border border-sysde-border bg-white p-1 self-start">
+        <Link
+          href="/reports"
+          className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium uppercase tracking-wide transition ${
+            tab === 'overview' ? 'bg-sysde-red text-white' : 'text-sysde-mid hover:text-sysde-gray'
+          }`}
+        >
+          Resumen
+        </Link>
+        <Link
+          href="/reports?tab=extractor"
+          className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium uppercase tracking-wide transition ${
+            tab === 'extractor' ? 'bg-sysde-red text-white' : 'text-sysde-mid hover:text-sysde-gray'
+          }`}
+        >
+          Extractor IA
+        </Link>
+      </div>
+
+      {tab === 'extractor' && <Extractor />}
+      {tab === 'overview' && <OverviewTab summary={summary} velocity={velocity} activity={activity} engagement={engagement} funnelData={funnelData} emailFunnel={emailFunnel} bySegment={bySegment} byProduct={byProduct} />}
+    </div>
+  );
+}
+
+interface OverviewProps {
+  summary: Awaited<ReturnType<typeof getPipelineSummary>>;
+  velocity: Awaited<ReturnType<typeof getStageVelocity>>;
+  activity: Awaited<ReturnType<typeof getActivityVolume>>;
+  engagement: Awaited<ReturnType<typeof getEngagementHistogram>>;
+  funnelData: Array<{ label: string; value: number; pct: number; color: string }>;
+  emailFunnel: Awaited<ReturnType<typeof getEmailFunnel>>;
+  bySegment: Awaited<ReturnType<typeof getPipelineBySegment>>;
+  byProduct: Awaited<ReturnType<typeof getPipelineByProduct>>;
+}
+
+function OverviewTab({ summary, velocity, activity, engagement, funnelData, emailFunnel, bySegment, byProduct }: OverviewProps) {
+  return (
+    <>
 
       {/* KPI row */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-7">
@@ -205,7 +252,7 @@ export default async function ReportsPage({
           </div>
         )}
       </ChartCard>
-    </div>
+    </>
   );
 }
 
