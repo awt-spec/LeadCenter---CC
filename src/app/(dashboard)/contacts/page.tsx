@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { auth } from '@/lib/auth';
 import { can } from '@/lib/rbac';
+import { ContactsByAccountView } from './components/contacts-by-account';
 import {
   listContacts,
+  listContactsByAccount,
   listCountries,
   listTags,
   listUsers,
@@ -52,8 +54,11 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
     sortDir: sp.sortDir === 'asc' ? 'asc' : 'desc',
   });
 
-  const [{ rows, total }, countries, users, tags] = await Promise.all([
+  const view = sp.view === 'by-account' ? 'by-account' : 'list';
+
+  const [{ rows, total }, byAccount, countries, users, tags] = await Promise.all([
     listContacts(session, filters),
+    view === 'by-account' ? listContactsByAccount(session, filters) : Promise.resolve(null),
     listCountries(),
     listUsers(),
     listTags(),
@@ -97,6 +102,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
     createdAt: r.createdAt,
     owner: r.owner,
     tags: r.tags,
+    seniorityLevel: r.seniorityLevel,
   }));
 
   return (
@@ -109,6 +115,25 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="flex items-center gap-1 rounded-lg border border-sysde-border bg-white p-1 text-xs">
+            <Link
+              href="/contacts"
+              className={`rounded-md px-3 py-1.5 font-medium uppercase tracking-wide ${
+                view === 'list' ? 'bg-sysde-red text-white shadow-sm' : 'text-sysde-mid hover:text-sysde-gray'
+              }`}
+            >
+              Por contacto
+            </Link>
+            <Link
+              href="/contacts?view=by-account"
+              className={`rounded-md px-3 py-1.5 font-medium uppercase tracking-wide ${
+                view === 'by-account' ? 'bg-sysde-red text-white shadow-sm' : 'text-sysde-mid hover:text-sysde-gray'
+              }`}
+            >
+              Por cuenta
+            </Link>
+          </div>
           {canImport && (
             <Button variant="outline" asChild>
               <Link href="/contacts/import">
@@ -172,6 +197,12 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
             }
           />
         </div>
+      ) : view === 'by-account' && byAccount ? (
+        <ContactsByAccountView
+          groups={byAccount.groups}
+          totalAccounts={byAccount.totalAccounts}
+          unassignedTotal={byAccount.unassignedTotal}
+        />
       ) : (
         <ContactsTable
           rows={tableRows}

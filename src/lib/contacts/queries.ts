@@ -125,6 +125,113 @@ export async function listCountries() {
     .filter((c): c is string => !!c);
 }
 
+/// Vista de la base de datos agrupada por cuenta. Trae los accounts top
+/// (por cantidad de contactos en scope), cada uno con sus contactos
+/// dentro. Pensada para que el equipo pueda ver "qué tenemos en BCP" de
+/// un vistazo en lugar de paginar 30k contactos planos.
+export async function listContactsByAccount(
+  session: Session,
+  filters: ContactFilters
+): Promise<{
+  groups: Array<{
+    accountId: string;
+    accountName: string;
+    accountCountry: string | null;
+    accountSegment: string | null;
+    totalContacts: number;
+    contacts: Array<{
+      id: string;
+      fullName: string;
+      email: string;
+      jobTitle: string | null;
+      seniorityLevel: string | null;
+      status: string;
+      country: string | null;
+      engagementScore: number;
+    }>;
+  }>;
+  unassignedTotal: number;
+  totalAccounts: number;
+}> {
+  const where: Prisma.ContactWhereInput = {};
+  const and: Prisma.ContactWhereInput[] = [];
+
+  if (!can(session, 'contacts:read:all')) {
+    if (!can(session, 'contacts:read:own')) return { groups: [], unassignedTotal: 0, totalAccounts: 0 };
+    and.push({ ownerId: session.user.id });
+  }
+  if (filters.country?.length) and.push({ country: { in: filters.country } });
+  if (filters.status?.length) and.push({ status: { in: filters.status } });
+  if (filters.ownerId?.length) and.push({ ownerId: { in: filters.ownerId } });
+  if (filters.marketSegment?.length) and.push({ marketSegment: { in: filters.marketSegment } });
+  if (and.length) where.AND = and;
+
+  // Step 1: top accounts by contact count within filters.
+  const groupBy = await prisma.contact.groupBy({
+    by: ['accountId'],
+    where,
+    _count: true,
+    orderBy: { _count: { id: 'desc' } },
+    take: 50,
+  });
+
+  const accountIds = groupBy.filter((g) => g.accountId).map((g) => g.accountId!);
+  const unassignedTotal = groupBy.find((g) => !g.accountId)?._count ?? 0;
+
+  // Step 2: account metadata
+  const accounts = await prisma.account.findMany({
+    where: { id: { in: accountIds } },
+    select: { id: true, name: true, country: true, segment: true },
+  });
+  const accountById = new Map(accounts.map((a) => [a.id, a] as const));
+
+  // Step 3: contacts for those accounts (cap each at 25, if more we link to
+  // the regular listing with filter prefilled)
+  const contacts = await prisma.contact.findMany({
+    where: { ...where, accountId: { in: accountIds } },
+    select: {
+      id: true, fullName: true, email: true, jobTitle: true,
+      seniorityLevel: true, status: true, country: true,
+      engagementScore: true, accountId: true,
+    },
+    orderBy: [{ engagementScore: 'desc' }, { fullName: 'asc' }],
+  });
+
+  const contactsByAccount = new Map<string, typeof contacts>();
+  for (const c of contacts) {
+    if (!c.accountId) continue;
+    let arr = contactsByAccount.get(c.accountId);
+    if (!arr) { arr = []; contactsByAccount.set(c.accountId, arr); }
+    arr.push(c);
+  }
+
+  const groups = groupBy
+    .filter((g) => g.accountId && accountById.has(g.accountId))
+    .map((g) => {
+      const acc = accountById.get(g.accountId!)!;
+      const cs = (contactsByAccount.get(g.accountId!) ?? []).slice(0, 25);
+      return {
+        accountId: acc.id,
+        accountName: acc.name,
+        accountCountry: acc.country,
+        accountSegment: acc.segment,
+        totalContacts: g._count,
+        contacts: cs.map((c) => ({
+          id: c.id,
+          fullName: c.fullName,
+          email: c.email,
+          jobTitle: c.jobTitle,
+          seniorityLevel: c.seniorityLevel,
+          status: c.status,
+          country: c.country,
+          engagementScore: c.engagementScore,
+        })),
+      };
+    });
+
+  return { groups, unassignedTotal, totalAccounts: groupBy.length };
+}
+
 export async function getContactAuditLog(contactId: string) {
   return prisma.auditLog.findMany({
     where: { resource: 'contacts', resourceId: contactId },

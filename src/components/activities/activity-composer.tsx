@@ -50,6 +50,17 @@ import {
 import { createActivity } from '@/lib/activities/mutations';
 import { cn } from '@/lib/utils';
 import type { ActivityFormValues } from '@/lib/activities/schemas';
+import { classifyContactHealth, HEALTH_BG, HEALTH_LABELS } from '@/lib/contacts/health';
+import type { ContactStatus, SeniorityLevel } from '@prisma/client';
+
+interface AccountContact {
+  id: string;
+  fullName: string;
+  email: string;
+  jobTitle: string | null;
+  seniorityLevel: SeniorityLevel | null;
+  status: ContactStatus;
+}
 
 type EntityOption = { id: string; label: string; sublabel?: string };
 
@@ -123,6 +134,13 @@ export function ActivityComposer({
   const [accountId, setAccountId] = useState<string>(defaults?.accountId ?? '');
   const [opportunityId, setOpportunityId] = useState<string>(defaults?.opportunityId ?? '');
 
+  // Contactos de la cuenta seleccionada — fetch on-demand cuando accountId
+  // cambia. Se usa para el dropdown de "Contacto" y para los chips de
+  // participantes (filtra a contactos REALES de la cuenta, no los 30k de la DB).
+  const [accountContacts, setAccountContacts] = useState<AccountContact[]>([]);
+  const [accountContactsLoading, setAccountContactsLoading] = useState(false);
+  const [showQuickCreate, setShowQuickCreate] = useState(false);
+
   const template: ActivityTemplate | null =
     templateKey !== 'free' ? ACTIVITY_TEMPLATES[templateKey] ?? null : null;
 
@@ -159,6 +177,52 @@ export function ActivityComposer({
     setSubject(template.name);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templateKey]);
+
+  // Fetch contactos de la cuenta cuando cambia. Cache simple por accountId
+  // — si el usuario alterna entre cuentas, no re-fetcheamos lo que ya
+  // tenemos.
+  const accountContactsCache = useMemo(() => new Map<string, AccountContact[]>(), []);
+  useEffect(() => {
+    if (!accountId) {
+      setAccountContacts([]);
+      return;
+    }
+    const cached = accountContactsCache.get(accountId);
+    if (cached) {
+      setAccountContacts(cached);
+      return;
+    }
+    setAccountContactsLoading(true);
+    fetch(`/api/accounts/${accountId}/contacts-mini`)
+      .then((r) => r.json())
+      .then((data: { contacts?: AccountContact[] }) => {
+        const list = data.contacts ?? [];
+        accountContactsCache.set(accountId, list);
+        setAccountContacts(list);
+      })
+      .catch(() => setAccountContacts([]))
+      .finally(() => setAccountContactsLoading(false));
+  }, [accountId, accountContactsCache]);
+
+  async function handleQuickCreateContact(input: {
+    firstName: string; lastName: string; email: string; jobTitle?: string; seniorityLevel?: string;
+  }) {
+    const res = await fetch('/api/contacts/quick-create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...input, accountId: accountId || null }),
+    });
+    const json = (await res.json()) as { ok?: boolean; contact?: AccountContact; error?: string; alreadyExisted?: boolean };
+    if (!res.ok || !json.ok || !json.contact) {
+      throw new Error(json.error ?? 'No se pudo crear el contacto');
+    }
+    // Add to local list + select as primary contact
+    setAccountContacts((prev) => [json.contact!, ...prev.filter((c) => c.id !== json.contact!.id)]);
+    accountContactsCache.delete(accountId); // force refetch next time
+    setContactId(json.contact.id);
+    setShowQuickCreate(false);
+    return json;
+  }
 
   const onPickTemplate = (key: string | 'free') => {
     setTemplateKey(key);
@@ -255,19 +319,51 @@ export function ActivityComposer({
                 <Section title="Vinculación">
                   <div className="grid gap-3 md:grid-cols-3">
                     <div>
-                      <Label className="mb-1 block text-xs">Contacto</Label>
+                      <div className="mb-1 flex items-center justify-between">
+                        <Label className="text-xs">Contacto</Label>
+                        {accountId && (
+                          <button
+                            type="button"
+                            onClick={() => setShowQuickCreate((s) => !s)}
+                            className="text-[11px] font-medium text-sysde-red hover:underline"
+                          >
+                            {showQuickCreate ? 'Cerrar' : '+ Crear'}
+                          </button>
+                        )}
+                      </div>
                       <Select
                         value={contactId || NONE}
                         onValueChange={(v) => setContactId(v === NONE ? '' : v)}
                       >
-                        <SelectTrigger><SelectValue placeholder="Sin contacto" /></SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder={accountId ? (accountContactsLoading ? 'Cargando…' : 'Sin contacto') : 'Sin contacto'} /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value={NONE}>Sin contacto</SelectItem>
-                          {contacts.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
-                          ))}
+                          {accountId && accountContacts.length > 0
+                            ? accountContacts.map((c) => {
+                                const h = classifyContactHealth({
+                                  email: c.email, status: c.status, seniorityLevel: c.seniorityLevel,
+                                });
+                                return (
+                                  <SelectItem key={c.id} value={c.id}>
+                                    <span className="flex items-center gap-2">
+                                      <span className={cn('h-1.5 w-1.5 rounded-full', HEALTH_BG[h])} title={HEALTH_LABELS[h]} />
+                                      {c.fullName}
+                                      {c.jobTitle && <span className="text-[11px] text-sysde-mid">· {c.jobTitle}</span>}
+                                    </span>
+                                  </SelectItem>
+                                );
+                              })
+                            : contacts.map((c) => (
+                                <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
+                              ))}
                         </SelectContent>
                       </Select>
+                      {showQuickCreate && (
+                        <QuickCreateContactForm
+                          onSubmit={handleQuickCreateContact}
+                          onCancel={() => setShowQuickCreate(false)}
+                        />
+                      )}
                     </div>
                     <div>
                       <Label className="mb-1 block text-xs">Cuenta</Label>
@@ -394,12 +490,30 @@ export function ActivityComposer({
                   )}
                 </Section>
 
-                {/* Participantes */}
-                {(template?.requiresParticipants || !template) && contacts.length > 0 && (
-                  <Section title="Participantes (contactos externos)">
+                {/* Participantes — preferimos los contactos de la cuenta
+                    seleccionada (más relevantes para una demo / reunión); si
+                    no hay cuenta caemos a la lista global lite (top 30). */}
+                {(template?.requiresParticipants || !template) && (accountContacts.length > 0 || contacts.length > 0) && (
+                  <Section
+                    title={
+                      accountId && accountContacts.length > 0
+                        ? `Participantes — contactos de la cuenta (${accountContacts.length})`
+                        : 'Participantes (contactos externos)'
+                    }
+                  >
                     <div className="flex flex-wrap gap-2">
-                      {contacts.slice(0, 30).map((c) => {
+                      {(accountContacts.length > 0 ? accountContacts : contacts.slice(0, 30)).map((c) => {
                         const active = participantContactIds.includes(c.id);
+                        const isAccountContact = 'fullName' in c;
+                        const health = isAccountContact
+                          ? classifyContactHealth({
+                              email: (c as AccountContact).email,
+                              status: (c as AccountContact).status,
+                              seniorityLevel: (c as AccountContact).seniorityLevel,
+                            })
+                          : null;
+                        const label = isAccountContact ? (c as AccountContact).fullName : (c as EntityOption).label;
+                        const sublabel = isAccountContact ? (c as AccountContact).jobTitle : null;
                         return (
                           <button
                             key={c.id}
@@ -410,17 +524,22 @@ export function ActivityComposer({
                               )
                             }
                             className={cn(
-                              'rounded-md border px-2.5 py-1 text-xs transition-colors',
+                              'flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors',
                               active
                                 ? 'border-sysde-red bg-sysde-red-light text-sysde-red'
                                 : 'border-sysde-border bg-white text-sysde-gray hover:border-sysde-red/30'
                             )}
                           >
-                            {c.label}
+                            {health && <span className={cn('h-1.5 w-1.5 rounded-full', HEALTH_BG[health])} title={HEALTH_LABELS[health]} />}
+                            <span className="font-medium">{label}</span>
+                            {sublabel && <span className="text-[10px] text-sysde-mid">· {sublabel}</span>}
                           </button>
                         );
                       })}
                     </div>
+                    {accountId && accountContactsLoading && (
+                      <p className="mt-2 text-[11px] text-sysde-mid">Cargando contactos de la cuenta…</p>
+                    )}
                   </Section>
                 )}
 
@@ -706,4 +825,86 @@ function extractTextFromSections(
     else out.push(v);
   }
   return out.join('\n');
+}
+
+// ───────────────────────────────────────────────────────────
+// QuickCreateContactForm — inline form to add a contact mid-activity.
+// Aparece colapsable bajo el dropdown de "Contacto" cuando hay
+// accountId. Crea via /api/contacts/quick-create con campos mínimos.
+
+interface QuickCreateInput {
+  firstName: string; lastName: string; email: string;
+  jobTitle?: string; seniorityLevel?: string;
+}
+
+const SENIORITY_OPTS: Array<{ value: string; label: string }> = [
+  { value: 'UNKNOWN', label: 'Sin especificar' },
+  { value: 'ANALYST', label: 'Analista' },
+  { value: 'MANAGER', label: 'Gerente / Manager' },
+  { value: 'DIRECTOR', label: 'Director' },
+  { value: 'VP', label: 'VP' },
+  { value: 'C_LEVEL', label: 'C-Level (CEO/CFO/CTO)' },
+  { value: 'OWNER', label: 'Dueño / Founder' },
+];
+
+function QuickCreateContactForm({
+  onSubmit,
+  onCancel,
+}: {
+  onSubmit: (input: QuickCreateInput) => Promise<unknown>;
+  onCancel: () => void;
+}) {
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [jobTitle, setJobTitle] = useState('');
+  const [seniorityLevel, setSeniorityLevel] = useState('UNKNOWN');
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handle(e: React.FormEvent) {
+    e.preventDefault();
+    if (!firstName.trim() || !email.trim()) return;
+    setSubmitting(true);
+    try {
+      await onSubmit({ firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), jobTitle: jobTitle.trim() || undefined, seniorityLevel });
+    } catch (err) {
+      // toast comes from caller via reject — keep silent here
+      console.error(err);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={handle}
+      className="mt-2 space-y-2 rounded-md border border-sysde-border bg-sysde-bg/40 p-2"
+    >
+      <div className="grid grid-cols-2 gap-2">
+        <Input className="h-8 text-xs" placeholder="Nombre *" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+        <Input className="h-8 text-xs" placeholder="Apellido" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+      </div>
+      <Input className="h-8 text-xs" placeholder="email *" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+      <div className="grid grid-cols-2 gap-2">
+        <Input className="h-8 text-xs" placeholder="Cargo" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} />
+        <select
+          className="h-8 rounded-md border border-sysde-border bg-white px-2 text-xs"
+          value={seniorityLevel}
+          onChange={(e) => setSeniorityLevel(e.target.value)}
+        >
+          {SENIORITY_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+      <div className="flex justify-end gap-2 pt-1">
+        <button type="button" onClick={onCancel} className="text-[11px] text-sysde-mid hover:text-sysde-gray">Cancelar</button>
+        <button
+          type="submit"
+          disabled={submitting || !firstName.trim() || !email.trim()}
+          className="rounded-md bg-sysde-red px-3 py-1 text-[11px] font-medium text-white hover:bg-sysde-red-dk disabled:opacity-50"
+        >
+          {submitting ? 'Creando…' : 'Crear'}
+        </button>
+      </div>
+    </form>
+  );
 }

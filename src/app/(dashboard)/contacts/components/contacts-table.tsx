@@ -10,6 +10,8 @@ import { toast } from 'sonner';
 import { DataTable } from '@/components/shared/data-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { classifyContactHealth, HEALTH_BG, HEALTH_LABELS, type ContactHealth } from '@/lib/contacts/health';
+import type { ContactStatus, SeniorityLevel } from '@prisma/client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -59,6 +61,7 @@ export type ContactRow = {
   createdAt: Date;
   owner: Owner | null;
   tags: ContactTag[];
+  seniorityLevel?: string | null;
 };
 
 type Props = {
@@ -118,6 +121,25 @@ export function ContactsTable({
           </div>
         ),
         enableSorting: false,
+      },
+      {
+        id: 'health',
+        header: () => <span title="Salud del contacto">●</span>,
+        size: 30,
+        enableSorting: false,
+        cell: ({ row }) => {
+          const h = classifyContactHealth({
+            email: row.original.email,
+            status: row.original.status as ContactStatus,
+            seniorityLevel: row.original.seniorityLevel as SeniorityLevel | null,
+          });
+          return (
+            <div
+              className={`mx-auto h-2.5 w-2.5 rounded-full ${HEALTH_BG[h]}`}
+              title={HEALTH_LABELS[h]}
+            />
+          );
+        },
       },
       {
         id: 'name',
