@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import bcrypt from 'bcrypt';
+import { unstable_cache } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { authConfig } from '@/lib/auth.config';
@@ -18,7 +19,12 @@ const credentialsSchema = z.object({
   password: z.string().min(1),
 });
 
-async function loadUserPermissions(userId: string) {
+// OPT-007: cache de permisos por user. La query es 3-niveles de joins
+// (user → roles → role → permissions) y corre en cada login + cada
+// JWT update. Roles cambian poco — 5 min de revalidate es razonable.
+// El tag "user-permissions" se invalida cuando se editan roles del user
+// (ver mutations/admin.ts → revalidateTag('user-permissions')).
+async function loadUserPermissionsRaw(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
@@ -40,6 +46,12 @@ async function loadUserPermissions(userId: string) {
   );
   return { roles, permissions };
 }
+
+const loadUserPermissions = unstable_cache(
+  loadUserPermissionsRaw,
+  ['user-permissions-v1'],
+  { revalidate: 300, tags: ['user-permissions'] }
+);
 
 async function writeAuditLog(
   userId: string | null,
