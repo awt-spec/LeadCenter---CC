@@ -5,6 +5,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { can } from '@/lib/rbac';
+import { writeAuditLog } from '@/lib/audit/write';
 import {
   opportunityFormSchema,
   type OpportunityFormValues,
@@ -33,15 +34,13 @@ async function writeAudit(params: {
   changes?: unknown;
   metadata?: unknown;
 }) {
-  await prisma.auditLog.create({
-    data: {
-      userId: params.userId,
-      action: params.action,
-      resource: 'opportunities',
-      resourceId: params.resourceId,
-      changes: (params.changes ?? null) as Prisma.InputJsonValue,
-      metadata: (params.metadata ?? null) as Prisma.InputJsonValue,
-    },
+  await writeAuditLog({
+    userId: params.userId,
+    action: params.action,
+    resource: 'opportunities',
+    resourceId: params.resourceId,
+    changes: (params.changes ?? null) as Prisma.InputJsonValue,
+    metadata: (params.metadata ?? null) as Prisma.InputJsonValue,
   });
 }
 

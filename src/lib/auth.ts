@@ -53,19 +53,21 @@ const loadUserPermissions = unstable_cache(
   { revalidate: 300, tags: ['user-permissions'] }
 );
 
+// OPT-008 + Audit v3 (Batch B): delegamos en el helper central que
+// captura IP + user-agent automáticamente vía `next/headers`.
+import { writeAuditLog as writeAuditLogCentral } from '@/lib/audit/write';
+
 async function writeAuditLog(
   userId: string | null,
   action: string,
   metadata?: Record<string, unknown>
 ) {
   try {
-    await prisma.auditLog.create({
-      data: {
-        userId,
-        action,
-        resource: 'auth',
-        metadata: metadata ? (metadata as object) : undefined,
-      },
+    await writeAuditLogCentral({
+      userId,
+      action,
+      resource: 'auth',
+      metadata: metadata ? (metadata as object) : undefined,
     });
   } catch (err) {
     console.error('Failed to write audit log:', err);

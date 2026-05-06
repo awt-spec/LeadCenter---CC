@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { writeAuditLog } from '@/lib/audit/write';
 import {
   taskFormSchema,
   taskCommentSchema,
@@ -22,14 +23,12 @@ async function requireSession() {
 }
 
 async function audit(userId: string, action: string, resourceId: string, changes?: unknown) {
-  await prisma.auditLog.create({
-    data: {
-      userId,
-      action,
-      resource: 'tasks',
-      resourceId,
-      changes: (changes ?? null) as Prisma.InputJsonValue,
-    },
+  await writeAuditLog({
+    userId,
+    action,
+    resource: 'tasks',
+    resourceId,
+    changes: (changes ?? null) as Prisma.InputJsonValue,
   });
 }
 

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { hasRole } from '@/lib/rbac';
+import { writeAuditLog } from '@/lib/audit/write';
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -36,14 +37,12 @@ export async function togglePermission(
     });
   }
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.user.id,
-      action: enabled ? 'permission_grant' : 'permission_revoke',
-      resource: 'roles',
-      resourceId: roleId,
-      changes: { permissionId, enabled },
-    },
+  await writeAuditLog({
+    userId: session.user.id,
+    action: enabled ? 'permission_grant' : 'permission_revoke',
+    resource: 'roles',
+    resourceId: roleId,
+    changes: { permissionId, enabled },
   });
 
   revalidatePath('/settings/roles');
@@ -70,14 +69,12 @@ export async function assignUserRole(
     });
   }
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.user.id,
-      action: enabled ? 'role_grant' : 'role_revoke',
-      resource: 'users',
-      resourceId: userId,
-      changes: { roleId, enabled },
-    },
+  await writeAuditLog({
+    userId: session.user.id,
+    action: enabled ? 'role_grant' : 'role_revoke',
+    resource: 'users',
+    resourceId: userId,
+    changes: { roleId, enabled },
   });
 
   revalidatePath('/settings/users');

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { writeAuditLog } from '@/lib/audit/write';
 
 type Result =
   | { ok: true }
@@ -37,14 +38,12 @@ export async function assignActivity(
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.user.id,
-      action: 'assign',
-      resource: 'activities',
-      resourceId: activityId,
-      changes: { userIds },
-    },
+  await writeAuditLog({
+    userId: session.user.id,
+    action: 'assign',
+    resource: 'activities',
+    resourceId: activityId,
+    changes: { userIds },
   });
 
   // Notify each new assignee

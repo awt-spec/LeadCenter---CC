@@ -6,6 +6,7 @@ import type { Session } from 'next-auth';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { hasRole } from '@/lib/rbac';
+import { writeAuditLog } from '@/lib/audit/write';
 import {
   campaignFormSchema,
   campaignStepFormSchema,
@@ -33,14 +34,12 @@ function fieldErrorsFromZod(error: import('zod').ZodError) {
 }
 
 async function audit(userId: string | null, action: string, resourceId?: string, changes?: unknown) {
-  await prisma.auditLog.create({
-    data: {
-      userId,
-      action,
-      resource: 'campaigns',
-      resourceId,
-      changes: (changes ?? null) as Prisma.InputJsonValue,
-    },
+  await writeAuditLog({
+    userId,
+    action,
+    resource: 'campaigns',
+    resourceId,
+    changes: (changes ?? null) as Prisma.InputJsonValue,
   });
 }
 

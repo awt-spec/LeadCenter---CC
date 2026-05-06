@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { writeAuditLog } from '@/lib/audit/write';
 import { z } from 'zod';
 
 type Result =
@@ -47,14 +48,12 @@ export async function addAttachment(input: AttachmentInput): Promise<Result> {
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.user.id,
-      action: 'attachment_add',
-      resource: 'activities',
-      resourceId: v.activityId,
-      changes: { fileName: v.fileName, fileUrl: v.fileUrl },
-    },
+  await writeAuditLog({
+    userId: session.user.id,
+    action: 'attachment_add',
+    resource: 'activities',
+    resourceId: v.activityId,
+    changes: { fileName: v.fileName, fileUrl: v.fileUrl },
   });
 
   revalidatePath('/activities');

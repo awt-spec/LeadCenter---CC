@@ -5,6 +5,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { hasRole } from '@/lib/rbac';
+import { writeAuditLog } from '@/lib/audit/write';
 import {
   customFieldDefinitionSchema,
   type CustomFieldDefinitionInput,
@@ -28,14 +29,12 @@ async function audit(
   resourceId?: string,
   changes?: unknown
 ) {
-  await prisma.auditLog.create({
-    data: {
-      userId,
-      action,
-      resource: 'custom_fields',
-      resourceId,
-      changes: (changes ?? null) as Prisma.InputJsonValue,
-    },
+  await writeAuditLog({
+    userId,
+    action,
+    resource: 'custom_fields',
+    resourceId,
+    changes: (changes ?? null) as Prisma.InputJsonValue,
   });
 }
 

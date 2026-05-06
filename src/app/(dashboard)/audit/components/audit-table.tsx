@@ -14,6 +14,7 @@ import {
 import type { AuditLogRow } from '@/lib/audit/queries';
 import { ACTION_LABEL, ACTION_VARIANT, RESOURCE_LABEL } from './labels';
 import { ChangesDiff } from './changes-diff';
+import { UAIcon } from './ua-icon';
 
 export function AuditTable({
   rows,
@@ -54,13 +55,14 @@ export function AuditTable({
             <TableHead>Recurso</TableHead>
             <TableHead>ID</TableHead>
             <TableHead>IP</TableHead>
+            <TableHead className="w-[60px]">Cliente</TableHead>
             <TableHead className="w-[60px] text-right">Detalle</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="text-center py-12 text-sysde-mid text-sm">
+              <TableCell colSpan={8} className="text-center py-12 text-sysde-mid text-sm">
                 Sin eventos para los filtros actuales.
               </TableCell>
             </TableRow>
@@ -173,6 +175,9 @@ function AuditRow({ row }: { row: AuditLogRow }) {
       </TableCell>
       <TableCell className="align-top">
         <span className="text-[11px] font-mono text-sysde-mid">{row.ipAddress ?? '—'}</span>
+      </TableCell>
+      <TableCell className="align-top">
+        <UAIcon ua={row.userAgent} />
       </TableCell>
       <TableCell className="align-top text-right">
         {hasDetail ? (

@@ -5,6 +5,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { can } from '@/lib/rbac';
+import { writeAuditLog } from '@/lib/audit/write';
 import { accountFormSchema, type AccountFormValues } from './schemas';
 
 type ActionResult<T = undefined> =
@@ -23,14 +24,12 @@ async function writeAudit(params: {
   resourceId?: string;
   changes?: unknown;
 }) {
-  await prisma.auditLog.create({
-    data: {
-      userId: params.userId,
-      action: params.action,
-      resource: 'accounts',
-      resourceId: params.resourceId,
-      changes: (params.changes ?? null) as Prisma.InputJsonValue,
-    },
+  await writeAuditLog({
+    userId: params.userId,
+    action: params.action,
+    resource: 'accounts',
+    resourceId: params.resourceId,
+    changes: (params.changes ?? null) as Prisma.InputJsonValue,
   });
 }
 
