@@ -18,6 +18,7 @@ import {
   Plug,
   Flame,
   Zap,
+  ShieldCheck,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -46,6 +47,7 @@ const PRIMARY_NAV: NavItem[] = [
 ];
 
 const SECONDARY_NAV: NavItem[] = [
+  { label: 'Auditoría', href: '/audit', icon: ShieldCheck, permission: 'audit:read' },
   { label: 'Integraciones', href: '/settings/integrations', icon: Plug, permission: 'settings:read' },
   { label: 'Ajustes', href: '/settings/users', icon: Settings, permission: 'settings:read' },
 ];
