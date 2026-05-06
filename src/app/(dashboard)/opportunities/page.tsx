@@ -10,7 +10,10 @@ import { listCountries, listUsers } from '@/lib/contacts/queries';
 import { listOpportunities, getOpportunityStats } from '@/lib/opportunities/queries';
 import {
   getManagementStats,
-  getNeedAttentionOpps,
+  getNeedAttentionOppsByPerspective,
+  getNeedAttentionByOwner,
+  type AttentionPerspective,
+  type OwnerBucket,
 } from '@/lib/opportunities/management-queries';
 import { opportunityFilterSchema } from '@/lib/opportunities/schemas';
 import { OpportunityStats } from './components/opportunity-stats';
@@ -64,18 +67,33 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
   const effectiveScope: Prisma.OpportunityWhereInput =
     filters.onlyMine && canAll ? { ownerId: session.user.id } : mgmtScope;
 
+  // Perspective de "Atención requerida" (smart por default)
+  const ATTENTION_VALID = ['smart', 'urgency', 'value', 'unassigned', 'by_owner'] as const;
+  const attentionParam = typeof sp.attention === 'string' ? sp.attention : undefined;
+  const perspective: AttentionPerspective = ATTENTION_VALID.includes(
+    attentionParam as AttentionPerspective
+  )
+    ? (attentionParam as AttentionPerspective)
+    : 'smart';
+
   const [
     { rows, total },
     stats,
     mgmtStats,
     needAttention,
+    needAttentionByOwner,
     countries,
     users,
   ] = await Promise.all([
     listOpportunities(session, filters),
     getOpportunityStats(session),
     getManagementStats(effectiveScope),
-    getNeedAttentionOpps(effectiveScope, 6),
+    perspective === 'by_owner'
+      ? Promise.resolve([])
+      : getNeedAttentionOppsByPerspective(effectiveScope, perspective, 6),
+    perspective === 'by_owner'
+      ? getNeedAttentionByOwner(effectiveScope, 5)
+      : Promise.resolve<OwnerBucket[]>([]),
     listCountries(),
     listUsers(),
   ]);
@@ -193,8 +211,12 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
         />
         <NeedAttentionHero
           opps={needAttention}
+          byOwner={perspective === 'by_owner' ? needAttentionByOwner : undefined}
           totalNeedsResponse={mgmtStats.needsResponse}
           totalRed={mgmtStats.red}
+          perspective={perspective}
+          basePath="/opportunities"
+          searchParams={searchParamsString}
         />
       </div>
 

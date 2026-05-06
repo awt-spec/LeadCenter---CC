@@ -9,7 +9,10 @@ import { Card } from '@/components/ui/card';
 import { loadMarketingSprint, loadBDSprint, loadAudit } from '@/lib/sprint/queries';
 import {
   getManagementStats,
-  getNeedAttentionOpps,
+  getNeedAttentionOppsByPerspective,
+  getNeedAttentionByOwner,
+  type AttentionPerspective,
+  type OwnerBucket,
 } from '@/lib/opportunities/management-queries';
 import { SprintBoardView } from './components/sprint-board';
 import { AuditTable } from './components/audit-table';
@@ -99,7 +102,7 @@ export default async function SprintPage({ searchParams }: { searchParams: Searc
       {/* Hero "Atención requerida" del usuario actual — siempre visible
           en Sprint (excepto en Auditoría que tiene su propia consola). */}
       {tab !== 'audit' ? (
-        <MyAttentionWidget session={session} />
+        <MyAttentionWidget session={session} sp={sp} />
       ) : null}
 
       {tab === 'audit' ? (
@@ -113,31 +116,58 @@ export default async function SprintPage({ searchParams }: { searchParams: Searc
   );
 }
 
-async function MyAttentionWidget({ session }: { session: Session }) {
+async function MyAttentionWidget({
+  session,
+  sp,
+}: {
+  session: Session;
+  sp: Record<string, string | string[] | undefined>;
+}) {
   // Permiso de leer opps. Si solo tiene :read:own scopeamos a sus propias.
   if (!can(session, 'opportunities:read:all') && !can(session, 'opportunities:read:own')) {
     return null;
   }
-  const canAll = can(session, 'opportunities:read:all');
   // En Sprint queremos ver SIEMPRE las del user actual aunque sea admin —
   // el sprint es personal.
-  const scope: Prisma.OpportunityWhereInput = canAll
-    ? { ownerId: session.user.id }
-    : { ownerId: session.user.id };
+  const scope: Prisma.OpportunityWhereInput = { ownerId: session.user.id };
 
-  const [stats, opps] = await Promise.all([
+  const ATTENTION_VALID = ['smart', 'urgency', 'value', 'unassigned', 'by_owner'] as const;
+  const attentionParam = typeof sp.attention === 'string' ? sp.attention : undefined;
+  const perspective: AttentionPerspective = ATTENTION_VALID.includes(
+    attentionParam as AttentionPerspective
+  )
+    ? (attentionParam as AttentionPerspective)
+    : 'smart';
+
+  const [stats, opps, byOwner] = await Promise.all([
     getManagementStats(scope),
-    getNeedAttentionOpps(scope, 6),
+    perspective === 'by_owner'
+      ? Promise.resolve([])
+      : getNeedAttentionOppsByPerspective(scope, perspective, 6),
+    perspective === 'by_owner'
+      ? getNeedAttentionByOwner(scope, 5)
+      : Promise.resolve<OwnerBucket[]>([]),
   ]);
 
   // Si no tiene NADA en su pipeline abierto, no mostramos el widget
   if (stats.total === 0) return null;
 
+  const searchParamsString = new URLSearchParams();
+  for (const [k, v] of Object.entries(sp)) {
+    if (v === undefined) continue;
+    if (Array.isArray(v)) v.forEach((val) => searchParamsString.append(k, val));
+    else searchParamsString.set(k, v);
+  }
+
   return (
     <NeedAttentionHero
       opps={opps}
+      byOwner={perspective === 'by_owner' ? byOwner : undefined}
       totalNeedsResponse={stats.needsResponse}
       totalRed={stats.red}
+      perspective={perspective}
+      basePath="/sprint"
+      searchParams={searchParamsString}
     />
   );
 }
