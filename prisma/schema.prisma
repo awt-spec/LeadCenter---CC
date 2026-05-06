@@ -1420,3 +1420,21 @@ enum ContextLinkType {
   REPO
   OTHER
 }
+
+/// OPT-016: Cache compartido cross-instance/region.
+/// `unstable_cache` de Next.js es per-Vercel-function — en cold start
+/// se evapora y se vuelve a calcular. Esta tabla actúa como L2 cache
+/// que sobrevive a cold starts y es compartida entre todas las
+/// invocaciones serverless.
+///
+/// Patrón de uso: helper `cached(key, ttlMs, fn)` en
+/// `src/lib/shared/shared-cache.ts`. La tabla se limpia lazily
+/// (cada lectura que detecta expiresAt < now() borra esa fila).
+model Cache {
+  key       String   @id
+  value     Json
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}

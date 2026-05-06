@@ -15,6 +15,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
+      // `server-only` no está instalado como dep aparte — Next la provee
+      // en build. En Node (vitest) la aliaseamos a un stub vacío.
+      'server-only': resolve(__dirname, 'qa-performance/__tests__/_stubs/server-only.ts'),
     },
   },
 });

@@ -3,6 +3,7 @@ import { unstable_cache } from 'next/cache';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { can } from '@/lib/rbac';
+import { cached } from '@/lib/shared/shared-cache';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -41,8 +42,20 @@ function formatMoney(n: number, currency = 'USD'): string {
   return `${n.toFixed(0)} ${currency}`;
 }
 
+// OPT-016: cache layered.
+//   L1 = unstable_cache (in-memory de la Vercel function, instant hit)
+//   L2 = shared-cache en Postgres (sobrevive cold starts, ~10ms hit)
+//   L3 = el cómputo real (200-2000ms en miss frío)
+async function _loadDashboardDataLayered(userId: string, canReadAll: boolean) {
+  return cached(
+    `dashboard:${userId}:${canReadAll ? 'all' : 'own'}`,
+    60_000,
+    () => _loadDashboardData(userId, canReadAll)
+  );
+}
+
 const loadDashboardData = unstable_cache(
-  _loadDashboardData,
+  _loadDashboardDataLayered,
   ['dashboard-data'],
   { revalidate: 60, tags: ['dashboard'] }
 );
