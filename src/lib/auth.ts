@@ -139,7 +139,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const { roles, permissions } = await loadUserPermissions(user.id);
         token.roles = roles;
         token.permissions = permissions;
-        await writeAuditLog(user.id, 'login');
+        // OPT-008: fire-and-forget. Antes bloqueaba el login esperando que
+        // auditLog.create terminara. El catch interno de writeAuditLog ya
+        // protege ante errores DB.
+        void writeAuditLog(user.id, 'login').catch(() => undefined);
       } else if (trigger === 'update' && token.userId) {
         if (token.userId === DEMO_USER_ID) {
           token.roles = DEMO_ROLES;
@@ -160,7 +163,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           ? (message.token.userId as string)
           : null;
       if (userId === DEMO_USER_ID) return;
-      await writeAuditLog(userId, 'logout');
+      // OPT-008: fire-and-forget. Logout debería completar inmediatamente
+      // — no queremos que el user vea spinner mientras escribimos un log.
+      void writeAuditLog(userId, 'logout').catch(() => undefined);
     },
   },
 });
