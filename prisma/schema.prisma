@@ -1,5 +1,10 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // OPT-011: habilita `relationLoadStrategy: 'join'` para que los includes
+  // se materialicen con LATERAL JOINs en una sola query SQL en lugar de
+  // queries separadas. Reduce N+1 implícito en findMany con includes
+  // anidados (timeline de actividad, task drawer, opp detail).
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {

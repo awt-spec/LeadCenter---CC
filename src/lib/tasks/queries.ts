@@ -85,6 +85,10 @@ export async function listTasksByAccount(
 export async function getTaskById(id: string) {
   return prisma.task.findUnique({
     where: { id },
+    // OPT-011: relationJoins. El task drawer carga subtasks + comments +
+    // attachments + assignees + blockedBy + blocking. Sin relationJoins
+    // son ~8 queries separadas en serie. Con join, una sola SQL.
+    relationLoadStrategy: 'join',
     include: {
       createdBy: { select: { id: true, name: true, avatarUrl: true } },
       assignees: {

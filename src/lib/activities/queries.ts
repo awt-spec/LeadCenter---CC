@@ -160,6 +160,11 @@ export async function listActivities(
     prisma.activity.findMany({
       where,
       include: INCLUDE,
+      // OPT-011: con relationJoins habilitado, Prisma materializa los
+      // 9 includes en una sola query SQL con LATERAL JOINs en lugar de
+      // 1 + N queries separadas. Reduce 25 activities × ~10 includes =
+      // 250 round-trips → 1.
+      relationLoadStrategy: 'join',
       orderBy: { occurredAt: 'desc' },
       skip: (filters.page - 1) * filters.pageSize,
       take: filters.pageSize,

@@ -105,6 +105,9 @@ export async function getOpportunityStats(session: Session) {
 export async function getOpportunityById(session: Session, id: string) {
   const opp = await prisma.opportunity.findUnique({
     where: { id },
+    // OPT-011: relationJoins. contactRoles + stageHistory + checkpoints
+    // (con sus nested includes) en un solo SQL en lugar de 4 queries.
+    relationLoadStrategy: 'join',
     include: {
       account: {
         select: { id: true, name: true, country: true, segment: true },
