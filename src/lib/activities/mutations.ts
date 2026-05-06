@@ -68,6 +68,25 @@ export async function createActivity(
   const bodyText = data.bodyText ?? plainTextFromDoc(data.bodyJson);
   const now = data.occurredAt ?? new Date();
 
+  // OPT-005: garantizar que accountId siempre está poblado si la actividad
+  // está linkeada a un contacto u oportunidad. Esto permite filtrar el
+  // timeline de cuenta con `accountId = X` directo (sin OR), 200× más rápido.
+  let resolvedAccountId = data.accountId ?? null;
+  if (!resolvedAccountId && data.opportunityId) {
+    const opp = await prisma.opportunity.findUnique({
+      where: { id: data.opportunityId },
+      select: { accountId: true },
+    });
+    if (opp?.accountId) resolvedAccountId = opp.accountId;
+  }
+  if (!resolvedAccountId && data.contactId) {
+    const c = await prisma.contact.findUnique({
+      where: { id: data.contactId },
+      select: { accountId: true },
+    });
+    if (c?.accountId) resolvedAccountId = c.accountId;
+  }
+
   const activity = await prisma.$transaction(async (tx) => {
     const a = await tx.activity.create({
       data: {
@@ -80,7 +99,7 @@ export async function createActivity(
         occurredAt: now,
         durationMinutes: data.durationMinutes ?? undefined,
         contactId: data.contactId ?? undefined,
-        accountId: data.accountId ?? undefined,
+        accountId: resolvedAccountId ?? undefined,
         opportunityId: data.opportunityId ?? undefined,
         nextActionType: data.nextActionType ?? undefined,
         nextActionNote: data.nextActionNote,

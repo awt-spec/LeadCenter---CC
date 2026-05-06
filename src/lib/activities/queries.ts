@@ -86,14 +86,15 @@ function buildWhere(
     and.push({ opportunityId: scope.opportunityId });
   }
   if (scope.accountId) {
-    // Activities linked directly to the account OR via its opportunities/contacts
-    and.push({
-      OR: [
-        { accountId: scope.accountId },
-        { opportunity: { accountId: scope.accountId } },
-        { contact: { accountId: scope.accountId } },
-      ],
-    });
+    // OPT-005: usamos accountId DIRECTO (el composite walks index ordenado).
+    // El OR previo (accountId OR opp.accountId OR contact.accountId) tomaba
+    // 1.5-19s en cuentas calientes porque Postgres no podía elegir un único
+    // índice. Backfilleamos accountId en activities con contactId-only
+    // (ver migration 20260505190000_backfill_activity_account); las
+    // activities con contact sin account son orphans que no aparecen en
+    // ninguna cuenta. Las nuevas activities setean accountId desde el
+    // composer cuando linkean contact/opp.
+    and.push({ accountId: scope.accountId });
   }
 
   // For SDR / functional_consultant scoping: limit to activities they created or linked to
