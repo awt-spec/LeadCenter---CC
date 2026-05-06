@@ -6,12 +6,16 @@ import { Forbidden } from '@/components/shared/forbidden';
 import { listUsers } from '@/lib/contacts/queries';
 import {
   listAuditLog,
-  getAuditStats,
   getAuditByDay,
   getTopUsers,
   getResourceBreakdown,
   getDistinctActionsAndResources,
   getUserDrilldown,
+  getActivityHeatmap,
+  getHourDistribution,
+  getOnlineUsers,
+  getAuditStatsWithDeltas,
+  getUserSessions,
 } from '@/lib/audit/queries';
 import { parseAuditFilters } from '@/lib/audit/parse-filters';
 import { AuditStatsBar } from './components/audit-stats';
@@ -22,7 +26,10 @@ import {
   TopUsersChart,
   ResourceDonut,
 } from './components/audit-charts';
+import { ActivityHeatmap, HourDistribution } from './components/activity-heatmap';
 import { UserActivityPanel } from './components/user-activity-panel';
+import { OnlineNowCard } from './components/online-now';
+import { AuditToolbar } from './components/audit-toolbar';
 
 export const metadata = { title: 'Auditoría' };
 export const dynamic = 'force-dynamic';
@@ -38,7 +45,6 @@ export default async function AuditPage({ searchParams }: { searchParams: Search
     return <Forbidden message="No tienes permiso para ver la auditoría." />;
   }
 
-  // Reusable URLSearchParams (sin filtros internos para construir baseUrl)
   const urlParams = new URLSearchParams();
   for (const [k, v] of Object.entries(sp)) {
     if (v === undefined) continue;
@@ -50,40 +56,80 @@ export default async function AuditPage({ searchParams }: { searchParams: Search
   const focusUserId =
     filters.userId && filters.userId.length === 1 ? filters.userId[0] : null;
 
-  // Carga en paralelo. Atención al pool: 7 queries concurrentes + auth.
-  // Con connection_limit=15 (post-hotfix) sobra.
-  const [logResult, stats, dailyData, topUsers, resourceBreakdown, dropdown, users, drilldown] =
-    await Promise.all([
-      listAuditLog(filters),
-      getAuditStats(),
-      getAuditByDay(30),
-      getTopUsers(30, 10),
-      getResourceBreakdown(30),
-      getDistinctActionsAndResources(),
-      listUsers(),
-      focusUserId ? getUserDrilldown(focusUserId, 30) : Promise.resolve(null),
-    ]);
+  // 11 queries en paralelo. Con connection_limit=15 (post-hotfix) cabe.
+  // Si vemos P2024 aquí también, partimos en 2 ondas.
+  const [
+    logResult,
+    stats,
+    dailyData,
+    heatmap,
+    hourDist,
+    topUsers,
+    resourceBreakdown,
+    onlineUsers,
+    dropdown,
+    users,
+    drilldown,
+    sessions,
+  ] = await Promise.all([
+    listAuditLog(filters),
+    getAuditStatsWithDeltas(),
+    getAuditByDay(30),
+    getActivityHeatmap(30),
+    getHourDistribution(30),
+    getTopUsers(30, 10),
+    getResourceBreakdown(30),
+    getOnlineUsers(5, 10),
+    getDistinctActionsAndResources(),
+    listUsers(),
+    focusUserId ? getUserDrilldown(focusUserId, 30) : Promise.resolve(null),
+    focusUserId ? getUserSessions(focusUserId, 30, 30, 15) : Promise.resolve([]),
+  ]);
 
-  // Construir baseUrl preservando filtros pero sin la página (la añade el paginador)
   const baseParams = new URLSearchParams(urlParams);
   baseParams.delete('page');
   const baseUrl = baseParams.toString() ? `/audit?${baseParams.toString()}` : '/audit';
 
   return (
     <div className="space-y-6">
-      <header className="flex items-end justify-between">
+      <header className="flex items-end justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-sysde-gray">Auditoría</h1>
           <p className="text-sm text-sysde-mid mt-1">
-            Quién hizo qué, cuándo y sobre qué recurso. Datos de los últimos 30 días en stats.
+            Quién hizo qué, cuándo y sobre qué recurso. Stats de los últimos 30 días.
           </p>
         </div>
+        <AuditToolbar />
       </header>
 
       <AuditStatsBar stats={stats} />
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+      {/* Heatmap + Hour distribution */}
+      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <Card className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-sysde-gray">
+              Heatmap de actividad — hora × día (30d)
+            </h3>
+            <span className="text-[10px] text-sysde-mid">
+              UTC del servidor · hora local del log
+            </span>
+          </div>
+          {heatmap.length === 0 ? (
+            <div className="text-sm text-sysde-mid text-center py-12">
+              Sin datos para los últimos 30 días.
+            </div>
+          ) : (
+            <ActivityHeatmap data={heatmap} />
+          )}
+        </Card>
+
+        <OnlineNowCard users={onlineUsers} windowMin={5} />
+      </div>
+
+      {/* Daily area + hour distribution + resource donut */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="p-4 lg:col-span-2">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-sysde-gray">Acciones por día (30d)</h3>
           </div>
@@ -104,9 +150,22 @@ export default async function AuditPage({ searchParams }: { searchParams: Search
             <ResourceDonut data={resourceBreakdown} />
           )}
         </Card>
+
+        <Card className="p-4 lg:col-span-3">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-sysde-gray">
+              Distribución por hora del día (30d)
+            </h3>
+            <span className="text-[10px] text-sysde-mid">
+              encuentra los picos · sirve para detectar uso fuera de horario
+            </span>
+          </div>
+          <HourDistribution data={hourDist} />
+        </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+      {/* Filters + table + drilldown */}
+      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="space-y-4">
           <Card className="p-4 space-y-3">
             <h3 className="text-sm font-semibold text-sysde-gray">Filtros</h3>
@@ -136,7 +195,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Search
 
         <aside className="space-y-4">
           {drilldown ? (
-            <UserActivityPanel drilldown={drilldown} />
+            <UserActivityPanel drilldown={drilldown} sessions={sessions} />
           ) : (
             <Card className="p-4">
               <h3 className="text-sm font-semibold text-sysde-gray mb-3">Top usuarios (30d)</h3>
@@ -163,12 +222,13 @@ export default async function AuditPage({ searchParams }: { searchParams: Search
           )}
 
           <Card className="p-4">
-            <h3 className="text-sm font-semibold text-sysde-gray mb-2">Tip</h3>
-            <p className="text-xs text-sysde-mid leading-relaxed">
-              Hacé click en un usuario en la tabla para abrir su perfil de actividad
-              completo: tiempo activo estimado, días activos, distribución por
-              acciones y recursos.
-            </p>
+            <h3 className="text-sm font-semibold text-sysde-gray mb-2">¿Cómo se usa?</h3>
+            <ul className="text-xs text-sysde-mid leading-relaxed space-y-1.5 list-disc list-inside">
+              <li>Click en un usuario → su perfil con sesiones, tiempo activo y distribución.</li>
+              <li>Click en un ID de recurso → la trail completa de ese registro.</li>
+              <li>Botón <strong>Live</strong> auto-refresca cada 10s.</li>
+              <li>Botón <strong>Export CSV</strong> baja todo lo filtrado (cap 10K).</li>
+            </ul>
           </Card>
         </aside>
       </div>

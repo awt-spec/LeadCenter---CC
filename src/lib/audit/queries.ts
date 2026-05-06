@@ -343,3 +343,290 @@ export async function getDistinctActionsAndResources(): Promise<{
     resources: resources.map((r) => r.resource),
   };
 }
+
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║  v2 — analytics extendidos                                       ║
+// ╚══════════════════════════════════════════════════════════════════╝
+
+export type HeatmapCell = { dow: number; hour: number; count: number };
+export type HourBucket = { hour: number; count: number };
+export type OnlineUser = {
+  userId: string;
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+  lastAction: Date;
+  recentActions: number;
+};
+export type StatsWithDeltas = AuditStats & {
+  delta24h: number | null; // % vs día anterior
+  delta7d: number | null; // % vs semana anterior
+  delta30d: number | null; // % vs mes anterior
+};
+export type Session = {
+  start: Date;
+  end: Date;
+  durationMin: number;
+  actionCount: number;
+  resources: string[]; // distintos recursos tocados en la sesión
+};
+export type ResourceTrailEvent = {
+  id: string;
+  action: string;
+  changes: Prisma.JsonValue | null;
+  metadata: Prisma.JsonValue | null;
+  createdAt: Date;
+  user: { id: string; name: string | null; email: string; avatarUrl: string | null } | null;
+};
+
+/**
+ * Heatmap hora-del-día × día-de-la-semana, últimos `days` días.
+ * Devuelve los buckets densos (sin filas con 0). El UI rellena.
+ *
+ * date_part('dow', ...) en Postgres: 0=Domingo, 6=Sábado.
+ */
+export async function getActivityHeatmap(days = 30): Promise<HeatmapCell[]> {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const rows = await prisma.$queryRaw<
+    Array<{ dow: number; hour: number; count: bigint }>
+  >`
+    SELECT
+      EXTRACT(DOW  FROM "createdAt")::int   AS dow,
+      EXTRACT(HOUR FROM "createdAt")::int   AS hour,
+      COUNT(*)::bigint                       AS count
+    FROM "AuditLog"
+    WHERE "createdAt" >= ${since}
+    GROUP BY 1, 2
+    ORDER BY 1, 2
+  `;
+  return rows.map((r) => ({ dow: r.dow, hour: r.hour, count: Number(r.count) }));
+}
+
+/**
+ * Distribución plana por hora del día (0-23), agregando todos los días.
+ */
+export async function getHourDistribution(days = 30): Promise<HourBucket[]> {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const rows = await prisma.$queryRaw<Array<{ hour: number; count: bigint }>>`
+    SELECT
+      EXTRACT(HOUR FROM "createdAt")::int AS hour,
+      COUNT(*)::bigint AS count
+    FROM "AuditLog"
+    WHERE "createdAt" >= ${since}
+    GROUP BY 1
+    ORDER BY 1
+  `;
+  // Rellenar horas con 0 para que el chart no salte
+  const map = new Map(rows.map((r) => [r.hour, Number(r.count)]));
+  const buckets: HourBucket[] = [];
+  for (let h = 0; h < 24; h++) buckets.push({ hour: h, count: map.get(h) ?? 0 });
+  return buckets;
+}
+
+/**
+ * "Online ahora" — usuarios con actividad en los últimos `windowMin`.
+ * Sin WebSockets: aproximación basada en última acción.
+ */
+export async function getOnlineUsers(windowMin = 5, limit = 20): Promise<OnlineUser[]> {
+  const since = new Date(Date.now() - windowMin * 60 * 1000);
+  const grouped = await prisma.auditLog.groupBy({
+    by: ['userId'],
+    where: { createdAt: { gte: since }, userId: { not: null } },
+    _count: { _all: true },
+    _max: { createdAt: true },
+    orderBy: { _max: { createdAt: 'desc' } },
+    take: limit,
+  });
+  const userIds = grouped.map((g) => g.userId).filter((x): x is string => !!x);
+  if (userIds.length === 0) return [];
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, name: true, email: true, avatarUrl: true },
+  });
+  const userMap = new Map(users.map((u) => [u.id, u]));
+  return grouped
+    .filter((g) => g.userId && userMap.has(g.userId))
+    .map((g) => {
+      const u = userMap.get(g.userId!)!;
+      return {
+        userId: u.id,
+        name: u.name ?? u.email,
+        email: u.email,
+        avatarUrl: u.avatarUrl,
+        lastAction: g._max.createdAt!,
+        recentActions: g._count._all,
+      };
+    });
+}
+
+/**
+ * Stats con deltas vs el período anterior. Dejamos `topAction` y
+ * `topResource` igual que en `getAuditStats` y agregamos los % de
+ * cambio. Una sola RAID porque hace 6 counts en paralelo.
+ */
+export async function getAuditStatsWithDeltas(): Promise<StatsWithDeltas> {
+  const now = new Date();
+  const day = 24 * 60 * 60 * 1000;
+  const since24h = new Date(now.getTime() - day);
+  const since48h = new Date(now.getTime() - 2 * day);
+  const since7d = new Date(now.getTime() - 7 * day);
+  const since14d = new Date(now.getTime() - 14 * day);
+  const since30d = new Date(now.getTime() - 30 * day);
+  const since60d = new Date(now.getTime() - 60 * day);
+
+  const [
+    total24h,
+    prev24h,
+    total7d,
+    prev7d,
+    total30d,
+    prev30d,
+    uniqueUsers,
+    topActionRows,
+    topResourceRows,
+  ] = await Promise.all([
+    prisma.auditLog.count({ where: { createdAt: { gte: since24h } } }),
+    prisma.auditLog.count({
+      where: { createdAt: { gte: since48h, lt: since24h } },
+    }),
+    prisma.auditLog.count({ where: { createdAt: { gte: since7d } } }),
+    prisma.auditLog.count({
+      where: { createdAt: { gte: since14d, lt: since7d } },
+    }),
+    prisma.auditLog.count({ where: { createdAt: { gte: since30d } } }),
+    prisma.auditLog.count({
+      where: { createdAt: { gte: since60d, lt: since30d } },
+    }),
+    prisma.auditLog
+      .findMany({
+        where: { createdAt: { gte: since30d }, userId: { not: null } },
+        distinct: ['userId'],
+        select: { userId: true },
+      })
+      .then((r) => r.length),
+    prisma.auditLog.groupBy({
+      by: ['action'],
+      where: { createdAt: { gte: since30d } },
+      _count: { _all: true },
+      orderBy: { _count: { action: 'desc' } },
+      take: 1,
+    }),
+    prisma.auditLog.groupBy({
+      by: ['resource'],
+      where: { createdAt: { gte: since30d } },
+      _count: { _all: true },
+      orderBy: { _count: { resource: 'desc' } },
+      take: 1,
+    }),
+  ]);
+
+  const delta = (curr: number, prev: number): number | null =>
+    prev === 0 ? (curr === 0 ? 0 : null) : ((curr - prev) / prev) * 100;
+
+  return {
+    total24h,
+    total7d,
+    total30d,
+    uniqueUsers30d: uniqueUsers,
+    topAction: topActionRows[0]
+      ? { action: topActionRows[0].action, count: topActionRows[0]._count._all }
+      : null,
+    topResource: topResourceRows[0]
+      ? { resource: topResourceRows[0].resource, count: topResourceRows[0]._count._all }
+      : null,
+    delta24h: delta(total24h, prev24h),
+    delta7d: delta(total7d, prev7d),
+    delta30d: delta(total30d, prev30d),
+  };
+}
+
+/**
+ * Sesiones de un usuario: agrupamos clicks consecutivos en sesión nueva
+ * cuando hay gap > `gapMin` minutos. Default 30 min — convención común
+ * en analytics web.
+ */
+export async function getUserSessions(
+  userId: string,
+  days = 30,
+  gapMin = 30,
+  limit = 20
+): Promise<Session[]> {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const rows = await prisma.auditLog.findMany({
+    where: { userId, createdAt: { gte: since } },
+    select: { createdAt: true, resource: true },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  if (rows.length === 0) return [];
+
+  const sessions: Session[] = [];
+  const gapMs = gapMin * 60 * 1000;
+  let start = rows[0].createdAt;
+  let end = rows[0].createdAt;
+  let count = 0;
+  let resourceSet = new Set<string>();
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (r.createdAt.getTime() - end.getTime() > gapMs) {
+      sessions.push({
+        start,
+        end,
+        durationMin: Math.max(1, Math.round((end.getTime() - start.getTime()) / 60_000)),
+        actionCount: count,
+        resources: [...resourceSet],
+      });
+      start = r.createdAt;
+      resourceSet = new Set();
+      count = 0;
+    }
+    end = r.createdAt;
+    count += 1;
+    resourceSet.add(r.resource);
+  }
+  // Última sesión abierta
+  sessions.push({
+    start,
+    end,
+    durationMin: Math.max(1, Math.round((end.getTime() - start.getTime()) / 60_000)),
+    actionCount: count,
+    resources: [...resourceSet],
+  });
+
+  // Devolver las más recientes primero
+  return sessions.reverse().slice(0, limit);
+}
+
+/**
+ * Trail completo de un recurso específico (toda su historia).
+ * Útil para "ver qué le pasó a esta opp / cuenta / contacto".
+ */
+export async function getResourceTrail(
+  resource: string,
+  resourceId: string,
+  limit = 200
+): Promise<ResourceTrailEvent[]> {
+  const rows = await prisma.auditLog.findMany({
+    where: { resource, resourceId },
+    include: {
+      user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+  });
+  return rows as ResourceTrailEvent[];
+}
+
+/**
+ * Para CSV export — devuelve hasta `maxRows` filas planas.
+ * NO usa paginación: el operador exporta todo el filtro de una.
+ */
+export async function listAuditForExport(
+  filters: AuditFilters,
+  maxRows = 10_000
+): Promise<AuditLogRow[]> {
+  // Reusamos buildWhere via listAuditLog con pageSize = maxRows
+  const result = await listAuditLog({ ...filters, page: 1, pageSize: maxRows });
+  return result.rows;
+}

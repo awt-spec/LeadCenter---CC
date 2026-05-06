@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/table';
 import type { AuditLogRow } from '@/lib/audit/queries';
 import { ACTION_LABEL, ACTION_VARIANT, RESOURCE_LABEL } from './labels';
+import { ChangesDiff } from './changes-diff';
 
 export function AuditTable({
   rows,
@@ -158,10 +159,14 @@ function AuditRow({ row }: { row: AuditLogRow }) {
       <TableCell className="align-top text-sm">{resourceLabel}</TableCell>
       <TableCell className="align-top">
         {row.resourceId ? (
-          <code className="text-[10px] bg-sysde-bg px-1.5 py-0.5 rounded text-sysde-mid">
+          <Link
+            href={`/audit/resource/${encodeURIComponent(row.resource)}/${encodeURIComponent(row.resourceId)}`}
+            className="text-[10px] bg-sysde-bg px-1.5 py-0.5 rounded text-sysde-mid hover:bg-red-50 hover:text-sysde-red transition-colors font-mono"
+            title="Ver historia completa de este recurso"
+          >
             {row.resourceId.slice(0, 12)}
             {row.resourceId.length > 12 ? '…' : ''}
-          </code>
+          </Link>
         ) : (
           <span className="text-sysde-mid">—</span>
         )}
@@ -175,15 +180,13 @@ function AuditRow({ row }: { row: AuditLogRow }) {
             <summary className="cursor-pointer text-sysde-red text-xs hover:underline list-none">
               ver
             </summary>
-            <div className="absolute right-4 mt-1 max-w-md rounded-lg border border-sysde-border bg-white shadow-md p-3 z-10 text-left">
+            <div className="absolute right-4 mt-1 w-[480px] max-w-[90vw] rounded-lg border border-sysde-border bg-white shadow-lg p-3 z-10 text-left">
               {row.changes ? (
-                <div className="mb-2">
-                  <div className="text-[10px] uppercase tracking-wider text-sysde-mid mb-1">
+                <div className="mb-3">
+                  <div className="text-[10px] uppercase tracking-wider text-sysde-mid mb-1.5">
                     Cambios
                   </div>
-                  <pre className="text-[11px] font-mono whitespace-pre-wrap break-words text-sysde-gray bg-sysde-bg p-2 rounded">
-                    {JSON.stringify(row.changes, null, 2)}
-                  </pre>
+                  <ChangesDiff changes={row.changes} />
                 </div>
               ) : null}
               {row.metadata ? (

@@ -3,9 +3,10 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Clock, Calendar } from 'lucide-react';
-import type { UserDrilldown } from '@/lib/audit/queries';
+import { Clock, Calendar, History } from 'lucide-react';
+import type { UserDrilldown, Session } from '@/lib/audit/queries';
 import { ACTION_LABEL, ACTION_VARIANT, RESOURCE_LABEL } from './labels';
+import { SessionTimeline } from './session-timeline';
 
 function formatMin(min: number): string {
   if (min < 60) return `${min}m`;
@@ -17,7 +18,13 @@ function formatMin(min: number): string {
   return rh ? `${d}d ${rh}h` : `${d}d`;
 }
 
-export function UserActivityPanel({ drilldown }: { drilldown: UserDrilldown }) {
+export function UserActivityPanel({
+  drilldown,
+  sessions,
+}: {
+  drilldown: UserDrilldown;
+  sessions: Session[];
+}) {
   const initials = drilldown.name
     .split(' ')
     .map((w) => w[0])
@@ -106,6 +113,13 @@ export function UserActivityPanel({ drilldown }: { drilldown: UserDrilldown }) {
         </div>
       </div>
 
+      <div className="border-t border-sysde-border pt-3">
+        <div className="text-[11px] uppercase tracking-wider text-sysde-mid mb-2 flex items-center gap-1">
+          <History className="h-3 w-3" /> Sesiones recientes
+        </div>
+        <SessionTimeline sessions={sessions} />
+      </div>
+
       {drilldown.lastSeen ? (
         <div className="border-t border-sysde-border pt-3 text-xs text-sysde-mid">
           Última acción {formatDistanceToNow(drilldown.lastSeen, { addSuffix: true, locale: es })}
@@ -114,8 +128,8 @@ export function UserActivityPanel({ drilldown }: { drilldown: UserDrilldown }) {
 
       <p className="text-[10px] text-sysde-mid italic leading-snug border-t border-sysde-border pt-3">
         * El tiempo activo se estima por día como (última acción − primera
-        acción), capeado a 8h/día para evitar pestañas olvidadas. Es un
-        proxy, no un contador exacto.
+        acción), capeado a 8h/día. Una sesión rompe cuando hay más de 30m sin
+        actividad. Son proxies, no contadores exactos.
       </p>
     </Card>
   );
