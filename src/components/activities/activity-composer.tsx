@@ -52,6 +52,8 @@ import { cn } from '@/lib/utils';
 import type { ActivityFormValues } from '@/lib/activities/schemas';
 import { classifyContactHealth, HEALTH_BG, HEALTH_LABELS } from '@/lib/contacts/health';
 import type { ContactStatus, SeniorityLevel } from '@prisma/client';
+import { useAccountContacts } from '@/lib/hooks/use-account-contacts';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface AccountContact {
   id: string;
@@ -134,11 +136,14 @@ export function ActivityComposer({
   const [accountId, setAccountId] = useState<string>(defaults?.accountId ?? '');
   const [opportunityId, setOpportunityId] = useState<string>(defaults?.opportunityId ?? '');
 
-  // Contactos de la cuenta seleccionada — fetch on-demand cuando accountId
-  // cambia. Se usa para el dropdown de "Contacto" y para los chips de
-  // participantes (filtra a contactos REALES de la cuenta, no los 30k de la DB).
-  const [accountContacts, setAccountContacts] = useState<AccountContact[]>([]);
-  const [accountContactsLoading, setAccountContactsLoading] = useState(false);
+  // OPT-013: contactos de la cuenta vía React Query — cache compartido
+  // entre componentes que monten el mismo accountId, dedup automático
+  // de requests in-flight, y los datos persisten 60s en cache (no se
+  // re-fetchean al re-abrir el composer).
+  const accountContactsQuery = useAccountContacts(accountId || null);
+  const accountContacts = (accountContactsQuery.data ?? []) as AccountContact[];
+  const accountContactsLoading = accountContactsQuery.isLoading;
+  const queryClient = useQueryClient();
   const [showQuickCreate, setShowQuickCreate] = useState(false);
 
   const template: ActivityTemplate | null =
@@ -178,32 +183,6 @@ export function ActivityComposer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templateKey]);
 
-  // Fetch contactos de la cuenta cuando cambia. Cache simple por accountId
-  // — si el usuario alterna entre cuentas, no re-fetcheamos lo que ya
-  // tenemos.
-  const accountContactsCache = useMemo(() => new Map<string, AccountContact[]>(), []);
-  useEffect(() => {
-    if (!accountId) {
-      setAccountContacts([]);
-      return;
-    }
-    const cached = accountContactsCache.get(accountId);
-    if (cached) {
-      setAccountContacts(cached);
-      return;
-    }
-    setAccountContactsLoading(true);
-    fetch(`/api/accounts/${accountId}/contacts-mini`)
-      .then((r) => r.json())
-      .then((data: { contacts?: AccountContact[] }) => {
-        const list = data.contacts ?? [];
-        accountContactsCache.set(accountId, list);
-        setAccountContacts(list);
-      })
-      .catch(() => setAccountContacts([]))
-      .finally(() => setAccountContactsLoading(false));
-  }, [accountId, accountContactsCache]);
-
   async function handleQuickCreateContact(input: {
     firstName: string; lastName: string; email: string; jobTitle?: string; seniorityLevel?: string;
   }) {
@@ -216,9 +195,13 @@ export function ActivityComposer({
     if (!res.ok || !json.ok || !json.contact) {
       throw new Error(json.error ?? 'No se pudo crear el contacto');
     }
-    // Add to local list + select as primary contact
-    setAccountContacts((prev) => [json.contact!, ...prev.filter((c) => c.id !== json.contact!.id)]);
-    accountContactsCache.delete(accountId); // force refetch next time
+    // Optimistic update + invalidate para que el próximo mount del
+    // hook re-fetchee con el contacto nuevo incluido.
+    queryClient.setQueryData<AccountContact[]>(
+      ['account-contacts', accountId],
+      (prev) => [json.contact!, ...(prev ?? []).filter((c) => c.id !== json.contact!.id)]
+    );
+    queryClient.invalidateQueries({ queryKey: ['account-contacts', accountId] });
     setContactId(json.contact.id);
     setShowQuickCreate(false);
     return json;

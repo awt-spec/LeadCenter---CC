@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
 import { AuthSessionProvider } from '@/components/providers/session-provider';
+import { QueryProvider } from '@/components/query-provider';
 import {
   listNotifications,
   countUnreadNotifications,
@@ -30,13 +31,15 @@ export default async function DashboardLayout({
 
   return (
     <AuthSessionProvider>
-      <div className="min-h-screen bg-sysde-bg">
-        <Sidebar user={user} permissions={session.user.permissions ?? []} />
-        <div className="lg:pl-[240px]">
-          <Topbar notifications={notifications} unreadCount={unreadCount} />
-          <main className="min-h-[calc(100vh-56px)] p-4 sm:p-6 lg:p-8">{children}</main>
+      <QueryProvider>
+        <div className="min-h-screen bg-sysde-bg">
+          <Sidebar user={user} permissions={session.user.permissions ?? []} />
+          <div className="lg:pl-[240px]">
+            <Topbar notifications={notifications} unreadCount={unreadCount} />
+            <main className="min-h-[calc(100vh-56px)] p-4 sm:p-6 lg:p-8">{children}</main>
+          </div>
         </div>
-      </div>
+      </QueryProvider>
     </AuthSessionProvider>
   );
 }
