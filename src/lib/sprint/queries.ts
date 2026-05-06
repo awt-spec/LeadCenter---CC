@@ -223,8 +223,11 @@ export async function loadMarketingSprint(session: Session): Promise<{
     take: 8,
   });
   const campaigns = await Promise.all(campaignRows.map(async (c) => {
+    // Engaged = contactos con señal positiva real. El enum
+    // CampaignContactStatus solo tiene: ACTIVE/PAUSED/COMPLETED/
+    // UNSUBSCRIBED/BOUNCED/REPLIED/CONVERTED. Engagement = REPLIED + CONVERTED.
     const engaged = await prisma.campaignContact.count({
-      where: { campaignId: c.id, status: { in: ['ENGAGED', 'OPENED', 'CLICKED', 'REPLIED'] } as never },
+      where: { campaignId: c.id, status: { in: ['REPLIED', 'CONVERTED'] } },
     }).catch(() => 0);
     return {
       id: c.id, name: c.name, status: c.status,
