@@ -1,5 +1,6 @@
 import { unstable_cache } from 'next/cache';
 import Link from 'next/link';
+import { Sparkles } from 'lucide-react';
 import { auth } from '@/lib/auth';
 import type { Prisma } from '@prisma/client';
 import { can } from '@/lib/rbac';
@@ -111,6 +112,13 @@ export default async function ReportsPage({
             Pipeline, conversión, velocidad y engagement.
           </p>
         </div>
+        <Link
+          href="/reports/exec"
+          className="inline-flex items-center gap-2 rounded-lg bg-sysde-red px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-sysde-red-dk transition-colors"
+        >
+          <Sparkles className="h-4 w-4" />
+          Brief ejecutivo IA
+        </Link>
         <div className="flex items-center gap-2">
           {tab === 'overview' && (
             <div className="flex items-center gap-1 rounded-lg border border-sysde-border bg-white p-1 text-xs">

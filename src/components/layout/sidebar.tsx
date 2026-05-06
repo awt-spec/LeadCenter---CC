@@ -19,6 +19,7 @@ import {
   Flame,
   Zap,
   ShieldCheck,
+  Sparkles,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -44,6 +45,7 @@ const PRIMARY_NAV: NavItem[] = [
   { label: 'Campañas', href: '/campaigns', icon: Megaphone },
   { label: 'Actividad', href: '/activities', icon: ActivityIcon },
   { label: 'Reportes', href: '/reports', icon: BarChart3 },
+  { label: 'Brief ejecutivo', href: '/reports/exec', icon: Sparkles },
 ];
 
 const SECONDARY_NAV: NavItem[] = [

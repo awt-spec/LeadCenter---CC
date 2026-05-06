@@ -48,3 +48,31 @@
     font-variation-settings: 'opsz' 32;
   }
 }
+
+/* Print styles para /reports/exec — el brief ejecutivo se imprime
+   limpio (sin sidebar/topbar) cuando el operador hace Ctrl+P. */
+@media print {
+  /* Ocultar chrome de la app: sidebar, topbar */
+  aside,
+  nav,
+  header[class*="topbar"],
+  .print\:hidden {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  /* Evitar cortes feos en cards */
+  [class*="card"],
+  .Card {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  @page {
+    margin: 18mm;
+    size: A4;
+  }
+}
