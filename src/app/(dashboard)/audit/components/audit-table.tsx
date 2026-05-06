@@ -12,9 +12,11 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { AuditLogRow } from '@/lib/audit/queries';
+import type { AnomalyFlag } from '@/lib/audit/anomalies';
 import { ACTION_LABEL, ACTION_VARIANT, RESOURCE_LABEL } from './labels';
 import { ChangesDiff } from './changes-diff';
 import { UAIcon } from './ua-icon';
+import { AnomalyBadges, AnomalySummary } from './anomaly-badges';
 
 export function AuditTable({
   rows,
@@ -22,12 +24,14 @@ export function AuditTable({
   page,
   pageSize,
   baseUrl,
+  anomalies,
 }: {
   rows: AuditLogRow[];
   total: number;
   page: number;
   pageSize: number;
   baseUrl: string; // ya incluye los filtros, e.g. "/audit?action=create"
+  anomalies?: Map<string, AnomalyFlag[]>;
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -67,7 +71,9 @@ export function AuditTable({
               </TableCell>
             </TableRow>
           ) : (
-            rows.map((r) => <AuditRow key={r.id} row={r} />)
+            rows.map((r) => (
+              <AuditRow key={r.id} row={r} flags={anomalies?.get(r.id)} />
+            ))
           )}
         </TableBody>
       </Table>
@@ -107,10 +113,13 @@ export function AuditTable({
   );
 }
 
-function AuditRow({ row }: { row: AuditLogRow }) {
+function AuditRow({ row, flags }: { row: AuditLogRow; flags?: AnomalyFlag[] }) {
   const actionLabel = ACTION_LABEL[row.action] ?? row.action;
   const actionVariant = ACTION_VARIANT[row.action] ?? 'secondary';
   const resourceLabel = RESOURCE_LABEL[row.resource] ?? row.resource;
+  // Si hay alertas de severity 3, marcamos la fila completa con un tinte rojo.
+  const hasAlert = flags?.some((f) => f.severity === 3);
+  const rowBg = hasAlert ? 'bg-red-50/40' : '';
 
   const userName = row.user?.name ?? row.user?.email ?? 'Sistema';
   const userInitials = userName
@@ -126,7 +135,7 @@ function AuditRow({ row }: { row: AuditLogRow }) {
     (row.metadata && Object.keys(row.metadata as object).length > 0);
 
   return (
-    <TableRow>
+    <TableRow className={rowBg}>
       <TableCell className="align-top">
         <div className="text-sm text-sysde-gray">
           {formatDistanceToNow(row.createdAt, { addSuffix: true, locale: es })}
@@ -156,7 +165,10 @@ function AuditRow({ row }: { row: AuditLogRow }) {
         )}
       </TableCell>
       <TableCell className="align-top">
-        <Badge variant={actionVariant}>{actionLabel}</Badge>
+        <div className="flex flex-col gap-1 items-start">
+          <Badge variant={actionVariant}>{actionLabel}</Badge>
+          <AnomalyBadges flags={flags} />
+        </div>
       </TableCell>
       <TableCell className="align-top text-sm">{resourceLabel}</TableCell>
       <TableCell className="align-top">
@@ -186,6 +198,11 @@ function AuditRow({ row }: { row: AuditLogRow }) {
               ver
             </summary>
             <div className="absolute right-4 mt-1 w-[480px] max-w-[90vw] rounded-lg border border-sysde-border bg-white shadow-lg p-3 z-10 text-left">
+              {flags && flags.length > 0 ? (
+                <div className="mb-3 pb-3 border-b border-sysde-border">
+                  <AnomalySummary flags={flags} />
+                </div>
+              ) : null}
               {row.changes ? (
                 <div className="mb-3">
                   <div className="text-[10px] uppercase tracking-wider text-sysde-mid mb-1.5">

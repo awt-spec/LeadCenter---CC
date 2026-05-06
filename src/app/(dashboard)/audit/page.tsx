@@ -18,7 +18,13 @@ import {
   getUserSessions,
 } from '@/lib/audit/queries';
 import { parseAuditFilters } from '@/lib/audit/parse-filters';
+import {
+  getUserBaselines,
+  getDayCountsForUsers,
+  flagAnomalies,
+} from '@/lib/audit/anomalies';
 import { AuditStatsBar } from './components/audit-stats';
+import { AISummaryCard } from './components/ai-summary-card';
 import { AuditFilters } from './components/audit-filters';
 import { AuditTable } from './components/audit-table';
 import {
@@ -90,6 +96,16 @@ export default async function AuditPage({ searchParams }: { searchParams: Search
   baseParams.delete('page');
   const baseUrl = baseParams.toString() ? `/audit?${baseParams.toString()}` : '/audit';
 
+  // Calcular anomalías sobre la página actual de eventos.
+  const visibleUserIds = [
+    ...new Set(logResult.rows.map((r) => r.userId).filter(Boolean) as string[]),
+  ];
+  const [baselines, todayCounts] = await Promise.all([
+    getUserBaselines(visibleUserIds, 30),
+    getDayCountsForUsers(visibleUserIds),
+  ]);
+  const anomalyMap = flagAnomalies(logResult.rows, baselines, todayCounts);
+
   return (
     <div className="space-y-6">
       <header className="flex items-end justify-between gap-4 flex-wrap">
@@ -103,6 +119,8 @@ export default async function AuditPage({ searchParams }: { searchParams: Search
       </header>
 
       <AuditStatsBar stats={stats} />
+
+      <AISummaryCard />
 
       {/* Heatmap + Hour distribution */}
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
@@ -190,6 +208,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Search
             page={filters.page}
             pageSize={filters.pageSize}
             baseUrl={baseUrl}
+            anomalies={anomalyMap}
           />
         </div>
 
