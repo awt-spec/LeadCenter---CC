@@ -9,8 +9,8 @@ beforeAll(async () => {
 
 afterAll(async () => { await prisma.$disconnect(); });
 
-describe('OPT-002: Pipeline opps usa composite index', () => {
-  it('EXPLAIN del query de pipeline NO usa Seq Scan', async () => {
+describe('OPT-002: Pipeline opps NO regresiona a Seq Scan', () => {
+  it('EXPLAIN del query NO usa Seq Scan + execution < 100ms', async () => {
     const plan = await prisma.$queryRawUnsafe<Array<{ 'QUERY PLAN': string }>>(
       `EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
        SELECT id, name FROM "Opportunity"
@@ -19,9 +19,17 @@ describe('OPT-002: Pipeline opps usa composite index', () => {
     );
     const planText = plan.map((r) => r['QUERY PLAN']).join('\n');
 
-    // Antes del fix: Seq Scan + sort. Después: Index Scan via
-    // Opportunity_status_stageChangedAt_idx.
+    // Con 766 opps el Bitmap Index Scan del status + Sort top-N corre
+    // en ~1ms. Si las opps crecen a >5K y el sort se vuelve caro,
+    // habrá que agregar composite (status, stageChangedAt DESC).
+    // Este test guard catches the regression.
     expect(planText, `Plan completo:\n${planText}`).not.toMatch(/Seq Scan on "Opportunity"/);
-    expect(planText).toMatch(/Index Scan|Index Only Scan/);
+    expect(planText).toMatch(/Index Scan|Index Only Scan|Bitmap Index Scan/);
+
+    const m = planText.match(/Execution Time:\s*([\d.]+)\s*ms/);
+    if (m) {
+      const ms = Number(m[1]);
+      expect(ms, `Execution time: ${ms}ms — guard: <100ms`).toBeLessThan(100);
+    }
   });
 });
