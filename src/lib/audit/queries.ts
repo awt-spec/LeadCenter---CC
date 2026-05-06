@@ -630,3 +630,112 @@ export async function listAuditForExport(
   const result = await listAuditLog({ ...filters, page: 1, pageSize: maxRows });
   return result.rows;
 }
+
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║  v3 Batch C — permission matrix + inactive users                 ║
+// ╚══════════════════════════════════════════════════════════════════╝
+
+export type RoleEntry = { id: string; key: string; name: string };
+export type PermissionEntry = {
+  id: string;
+  key: string;
+  resource: string;
+  action: string;
+  description: string | null;
+};
+export type PermissionMatrix = {
+  roles: RoleEntry[];
+  permissions: PermissionEntry[];
+  matrix: Record<string, Set<string>>; // roleKey → Set<permissionKey>
+};
+
+const SENSITIVE_KEYWORDS = [
+  'delete',
+  'archive',
+  'role_grant',
+  'role_revoke',
+  'permission_grant',
+  'permission_revoke',
+  'change_role',
+  ':all',
+  'audit:read',
+];
+
+export function isSensitivePermission(key: string): boolean {
+  return SENSITIVE_KEYWORDS.some((k) => key.includes(k));
+}
+
+export async function getRolePermissionMatrix(): Promise<PermissionMatrix> {
+  const [roles, permissions, rolePerms] = await Promise.all([
+    prisma.role.findMany({
+      select: { id: true, key: true, name: true },
+      orderBy: { key: 'asc' },
+    }),
+    prisma.permission.findMany({
+      select: {
+        id: true,
+        key: true,
+        resource: true,
+        action: true,
+        description: true,
+      },
+      orderBy: [{ resource: 'asc' }, { action: 'asc' }],
+    }),
+    prisma.rolePermission.findMany({
+      select: { role: { select: { key: true } }, permission: { select: { key: true } } },
+    }),
+  ]);
+
+  const matrix: Record<string, Set<string>> = {};
+  for (const r of roles) matrix[r.key] = new Set();
+  for (const rp of rolePerms) {
+    if (matrix[rp.role.key]) matrix[rp.role.key].add(rp.permission.key);
+  }
+
+  return { roles, permissions, matrix };
+}
+
+export type InactiveUser = {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+  lastSeen: Date | null;
+};
+
+export async function getInactiveUsers(daysThreshold = 14): Promise<InactiveUser[]> {
+  const cutoff = new Date(Date.now() - daysThreshold * 24 * 60 * 60 * 1000);
+
+  // Subquery: users con cualquier acción después de cutoff
+  const activeUserIds = await prisma.auditLog.findMany({
+    where: { createdAt: { gte: cutoff }, userId: { not: null } },
+    distinct: ['userId'],
+    select: { userId: true },
+  });
+  const activeSet = new Set(activeUserIds.map((r) => r.userId).filter(Boolean) as string[]);
+
+  const users = await prisma.user.findMany({
+    where: { isActive: true, id: { notIn: [...activeSet] } },
+    select: { id: true, name: true, email: true, avatarUrl: true },
+    orderBy: { name: 'asc' },
+  });
+
+  // Última acción conocida (si nunca actuó queda null)
+  const lastSeenRows = await prisma.auditLog.groupBy({
+    by: ['userId'],
+    where: { userId: { in: users.map((u) => u.id) } },
+    _max: { createdAt: true },
+  });
+  const lastSeenMap = new Map<string, Date | null>();
+  for (const r of lastSeenRows) {
+    if (r.userId) lastSeenMap.set(r.userId, r._max.createdAt ?? null);
+  }
+
+  return users.map((u) => ({
+    id: u.id,
+    name: u.name ?? u.email,
+    email: u.email,
+    avatarUrl: u.avatarUrl,
+    lastSeen: lastSeenMap.get(u.id) ?? null,
+  }));
+}

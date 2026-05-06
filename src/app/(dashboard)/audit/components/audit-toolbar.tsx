@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Download, Pause, Play, RefreshCw } from 'lucide-react';
+import { SavedViews } from './saved-views';
 
 export function AuditToolbar() {
   const router = useRouter();
@@ -36,7 +37,8 @@ export function AuditToolbar() {
   })();
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 flex-wrap">
+      <SavedViews />
       <Button
         variant={live ? 'default' : 'outline'}
         size="sm"

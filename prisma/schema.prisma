@@ -64,6 +64,9 @@ model User {
   assignedCheckpoints          OpportunityCheckpoint[] @relation("CheckpointAssignee")
   completedCheckpoints         OpportunityCheckpoint[] @relation("CheckpointCompleter")
 
+  // Audit v3 — vistas guardadas de la sección /audit
+  auditViews                   AuditView[] @relation("UserAuditViews")
+
   @@index([email])
 }
 
@@ -1437,4 +1440,22 @@ model Cache {
   createdAt DateTime @default(now())
 
   @@index([expiresAt])
+}
+
+/// Audit v3 — Vistas guardadas de la sección /audit. Cada usuario puede
+/// guardar combinaciones de filtros para reusar (e.g. "Deletes últimos
+/// 7 días", "Acciones de Juan"). Si `isShared=true`, otros con
+/// audit:read también las ven.
+model AuditView {
+  id        String   @id @default(cuid())
+  ownerId   String
+  name      String
+  filters   Json
+  isShared  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner     User     @relation("UserAuditViews", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
 }
