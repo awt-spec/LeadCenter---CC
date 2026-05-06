@@ -51,6 +51,8 @@ export function usePipelineFilters() {
     (filters.onlyMine ? 1 : 0) +
     (filters.overdueNextAction ? 1 : 0) +
     (filters.stale7d ? 1 : 0) +
+    (filters.staleness && filters.staleness !== 'all' ? 1 : 0) +
+    (filters.needsResponse ? 1 : 0) +
     (filters.minValue !== undefined ? 1 : 0) +
     (filters.maxValue !== undefined ? 1 : 0) +
     (filters.closeFrom ? 1 : 0) +

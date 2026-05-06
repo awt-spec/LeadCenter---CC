@@ -24,6 +24,9 @@ export type PipelineFilters = {
   onlyMine?: boolean;
   overdueNextAction?: boolean;
   stale7d?: boolean;
+  // Reglas de gestión
+  staleness?: 'fresh' | 'yellow' | 'orange' | 'red' | 'all';
+  needsResponse?: boolean; // ball-in-court: lastActivityDirection = INBOUND
   includeWon?: boolean;
   includeLost?: boolean;
   includeStandBy?: boolean;
@@ -90,6 +93,32 @@ function buildPipelineWhere(session: Session, filters: PipelineFilters): Prisma.
     });
   }
 
+  // Reglas de gestión: filtros por staleness color
+  if (filters.staleness && filters.staleness !== 'all') {
+    const HOURS = 60 * 60 * 1000;
+    const now = Date.now();
+    if (filters.staleness === 'fresh') {
+      and.push({ lastActivityAt: { gte: new Date(now - 24 * HOURS) } });
+    } else if (filters.staleness === 'yellow') {
+      and.push({
+        lastActivityAt: { gte: new Date(now - 48 * HOURS), lt: new Date(now - 24 * HOURS) },
+      });
+    } else if (filters.staleness === 'orange') {
+      and.push({
+        lastActivityAt: { gte: new Date(now - 72 * HOURS), lt: new Date(now - 48 * HOURS) },
+      });
+    } else if (filters.staleness === 'red') {
+      and.push({
+        OR: [{ lastActivityAt: { lt: new Date(now - 72 * HOURS) } }, { lastActivityAt: null }],
+      });
+    }
+  }
+
+  // Ball-in-court: la pelota está en nuestro campo
+  if (filters.needsResponse) {
+    and.push({ lastActivityDirection: 'INBOUND' });
+  }
+
   if (and.length) where.AND = and;
   return where;
 }
@@ -132,6 +161,7 @@ export async function loadPipeline(session: Session, filters: PipelineFilters) {
     stageChangedAt: o.stageChangedAt,
     updatedAt: o.updatedAt,
     lastActivityAt: o.lastActivityAt,
+    lastActivityDirection: o.lastActivityDirection,
     account: o.account,
     owner: o.owner,
     primaryContact: o.contactRoles[0]

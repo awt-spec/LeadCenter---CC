@@ -33,6 +33,7 @@ import {
   formatMoney,
 } from '@/lib/shared/labels';
 import { getInitials, cn } from '@/lib/utils';
+import { ManagementBadges } from '@/components/opportunities/management-badges';
 import type { PipelineOpportunityCard } from '@/lib/pipeline/stats';
 
 type Props = {
@@ -160,13 +161,20 @@ export const OpportunityCard = memo(
             <span className="truncate">{card.account.name}</span>
           </Link>
 
-          <div className="mt-2">
+          <div className="mt-2 flex items-center gap-1.5 flex-wrap">
             <span
               className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium"
               style={{ backgroundColor: productColors.bg, color: productColors.text }}
             >
               {PRODUCT_LABELS[card.product as keyof typeof PRODUCT_LABELS] ?? card.product}
             </span>
+            {card.status === 'OPEN' ? (
+              <ManagementBadges
+                lastActivityAt={card.lastActivityAt}
+                lastActivityDirection={card.lastActivityDirection}
+                hideWhenFresh
+              />
+            ) : null}
           </div>
 
           <div className="my-3 h-px bg-sysde-border" />

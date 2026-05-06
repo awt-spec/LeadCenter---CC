@@ -31,6 +31,7 @@ import {
   STAGE_LABELS,
 } from '@/lib/shared/labels';
 import { getInitials } from '@/lib/utils';
+import { PipelineSavedViews } from './saved-views';
 
 type UserLite = { id: string; name: string; email: string; avatarUrl: string | null };
 
@@ -131,6 +132,71 @@ export function PipelineFilters({
         >
           Solo mías
         </Button>
+
+        {/* Reglas de gestión: chips de staleness + responder */}
+        <div className="inline-flex items-center gap-1 rounded-md border border-sysde-border bg-white p-0.5">
+          <button
+            type="button"
+            onClick={() =>
+              update({
+                staleness: filters.staleness === 'red' ? null : 'red',
+              })
+            }
+            className={`px-2 h-7 text-[11px] rounded font-medium transition-colors ${
+              filters.staleness === 'red'
+                ? 'bg-red-100 text-red-700'
+                : 'text-sysde-mid hover:text-red-700'
+            }`}
+            title="Sin gestión hace 72h+"
+          >
+            🔴 72h+
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              update({
+                staleness: filters.staleness === 'orange' ? null : 'orange',
+              })
+            }
+            className={`px-2 h-7 text-[11px] rounded font-medium transition-colors ${
+              filters.staleness === 'orange'
+                ? 'bg-orange-100 text-orange-700'
+                : 'text-sysde-mid hover:text-orange-700'
+            }`}
+            title="Sin gestión hace 48-72h"
+          >
+            🟠 48h
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              update({
+                staleness: filters.staleness === 'yellow' ? null : 'yellow',
+              })
+            }
+            className={`px-2 h-7 text-[11px] rounded font-medium transition-colors ${
+              filters.staleness === 'yellow'
+                ? 'bg-yellow-100 text-yellow-800'
+                : 'text-sysde-mid hover:text-yellow-800'
+            }`}
+            title="Sin gestión hace 24-48h"
+          >
+            🟡 24h
+          </button>
+        </div>
+
+        <Button
+          size="sm"
+          variant={filters.needsResponse ? 'default' : 'outline'}
+          onClick={() => update({ needsResponse: !filters.needsResponse })}
+          className={
+            filters.needsResponse ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''
+          }
+        >
+          🔵 Responder
+        </Button>
+
+        <PipelineSavedViews />
 
         <Button variant="outline" size="sm" onClick={() => setSheetOpen(true)}>
           <SlidersHorizontal className="mr-1.5 h-4 w-4" />

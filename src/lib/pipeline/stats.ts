@@ -1,4 +1,4 @@
-import type { OpportunityStage } from '@prisma/client';
+import type { OpportunityStage, ActivityDirection } from '@prisma/client';
 import { STAGE_PROBABILITY } from '@/lib/opportunities/stage-rules';
 
 export type PipelineOpportunityCard = {
@@ -18,6 +18,7 @@ export type PipelineOpportunityCard = {
   stageChangedAt: Date;
   updatedAt: Date;
   lastActivityAt: Date | null;
+  lastActivityDirection: ActivityDirection | null;
   account: { id: string; name: string };
   owner: { id: string; name: string; email: string; avatarUrl: string | null } | null;
   primaryContact: {

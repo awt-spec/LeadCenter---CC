@@ -30,6 +30,15 @@ export function parsePipelineFilters(sp: URLSearchParams): PipelineFilters {
     onlyMine: getBool('onlyMine'),
     overdueNextAction: getBool('overdueNextAction'),
     stale7d: getBool('stale7d'),
+    staleness:
+      sp.get('staleness') === 'fresh' ||
+      sp.get('staleness') === 'yellow' ||
+      sp.get('staleness') === 'orange' ||
+      sp.get('staleness') === 'red' ||
+      sp.get('staleness') === 'all'
+        ? (sp.get('staleness') as 'fresh' | 'yellow' | 'orange' | 'red' | 'all')
+        : undefined,
+    needsResponse: getBool('needsResponse'),
     includeWon: getBool('includeWon'),
     includeLost: getBool('includeLost'),
     includeStandBy: getBool('includeStandBy'),

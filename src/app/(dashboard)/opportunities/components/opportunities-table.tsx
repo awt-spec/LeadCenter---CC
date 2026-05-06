@@ -12,6 +12,9 @@ import { StageBadge } from './stage-badge';
 import { PRODUCT_LABELS, RATING_LABELS, formatMoney } from '@/lib/shared/labels';
 import { getInitials, cn } from '@/lib/utils';
 
+import type { ActivityDirection } from '@prisma/client';
+import { ManagementBadges } from '@/components/opportunities/management-badges';
+
 export type OpportunityRow = {
   id: string;
   code: string | null;
@@ -25,6 +28,8 @@ export type OpportunityRow = {
   probability: number;
   expectedCloseDate: Date | null;
   nextActionDate: Date | null;
+  lastActivityAt: Date | null;
+  lastActivityDirection: ActivityDirection | null;
   updatedAt: Date;
   account: { id: string; name: string; country: string | null };
   owner: { id: string; name: string; avatarUrl: string | null } | null;
@@ -55,7 +60,7 @@ export function OpportunitiesTable({
       id: 'name',
       header: 'Oportunidad',
       cell: ({ row }) => (
-        <div>
+        <div className="space-y-1">
           <div className="font-medium text-sysde-gray">{row.original.name}</div>
           <Link
             href={`/accounts/${row.original.account.id}`}
@@ -65,6 +70,15 @@ export function OpportunitiesTable({
           >
             {row.original.account.name}
           </Link>
+          {row.original.status === 'OPEN' ? (
+            <div>
+              <ManagementBadges
+                lastActivityAt={row.original.lastActivityAt}
+                lastActivityDirection={row.original.lastActivityDirection}
+                hideWhenFresh
+              />
+            </div>
+          ) : null}
         </div>
       ),
     },

@@ -68,6 +68,8 @@ model User {
   auditViews                   AuditView[] @relation("UserAuditViews")
   // Audit v3 — eventos de auditoria que este user marco como revisados
   reviewedAuditLogs            AuditLog[]  @relation("AuditLogReviewer")
+  // Vistas guardadas de oportunidades / pipeline
+  opportunityViews             OpportunityView[] @relation("UserOpportunityViews")
 
   @@index([email])
 }
@@ -493,6 +495,9 @@ model Opportunity {
   expectedCloseDate   DateTime?
   closedAt            DateTime?
   lastActivityAt      DateTime?
+  /// Reglas de gestión: dirección de la última actividad. Si == INBOUND
+  /// la pelota está en nuestro campo (badge azul "responder").
+  lastActivityDirection ActivityDirection?
   nextActionDate      DateTime?
   nextActionNote      String?
 
@@ -673,6 +678,11 @@ model Activity {
 
   tags                  ActivityTag[]   @default([])
 
+  /// Dirección de la actividad. Si null, se deriva del `type`:
+  /// EMAIL_RECEIVED → INBOUND, INTERNAL_NOTE/STAGE_CHANGE/STATUS_CHANGE
+  /// → INTERNAL, resto → OUTBOUND.
+  direction             ActivityDirection?
+
   occurredAt            DateTime        @default(now())
   durationMinutes       Int?
 
@@ -738,6 +748,15 @@ enum ActivityType {
   FILE_SHARED
   LINKEDIN_MESSAGE
   EVENT_ATTENDED
+}
+
+/// Reglas de gestión: dirección de una actividad para detectar
+/// "ball in your court" (cliente respondió, debemos responder) y
+/// para excluir notas internas del cómputo de staleness.
+enum ActivityDirection {
+  OUTBOUND   // nosotros lo hicimos hacia el cliente (call saliente, email enviado)
+  INBOUND    // cliente lo hizo hacia nosotros (email recibido, llamada entrante) — necesita respuesta
+  INTERNAL   // nota interna o evento de sistema (no afecta el reloj de gestión)
 }
 
 enum ActivityTag {
@@ -1455,6 +1474,24 @@ model Cache {
   createdAt DateTime @default(now())
 
   @@index([expiresAt])
+}
+
+/// Vistas guardadas de Pipeline / Opportunities. Misma idea que
+/// AuditView pero para los filtros del pipeline (q, stage, owner,
+/// product, country, includeWon/Lost/StandBy/Nurture, overdueNextAction,
+/// stale7d, etc.).
+model OpportunityView {
+  id        String   @id @default(cuid())
+  ownerId   String
+  name      String
+  filters   Json
+  isShared  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner     User     @relation("UserOpportunityViews", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
 }
 
 /// Audit v3 — Vistas guardadas de la sección /audit. Cada usuario puede

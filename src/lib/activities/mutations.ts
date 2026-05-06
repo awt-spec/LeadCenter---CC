@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { can } from '@/lib/rbac';
 import { writeAuditLog } from '@/lib/audit/write';
+import { deriveDirectionFromType } from '@/lib/opportunities/management-rules';
 import { activityFormSchema, type ActivityFormValues } from './schemas';
 import { parseMentionsFromDoc, plainTextFromDoc } from '@/lib/mentions/parse-mentions';
 import { createNotification } from '@/lib/notifications/create-notification';
@@ -86,6 +87,9 @@ export async function createActivity(
     if (c?.accountId) resolvedAccountId = c.accountId;
   }
 
+  // Reglas de gestión: direction se deriva del type cuando no se setea.
+  const direction = deriveDirectionFromType(data.type);
+
   const activity = await prisma.$transaction(async (tx) => {
     const a = await tx.activity.create({
       data: {
@@ -95,6 +99,7 @@ export async function createActivity(
         bodyJson: (data.bodyJson ?? null) as Prisma.InputJsonValue,
         bodyText,
         tags: data.tags,
+        direction,
         occurredAt: now,
         durationMinutes: data.durationMinutes ?? undefined,
         contactId: data.contactId ?? undefined,
@@ -138,10 +143,16 @@ export async function createActivity(
       });
     }
     if (data.opportunityId) {
+      // Reglas de gestión: actualizamos lastActivityDirection solo si la
+      // nueva actividad NO es INTERNAL (las notas internas/eventos de
+      // sistema no afectan el reloj de gestión visible al cliente).
+      const directionUpdate =
+        direction === 'INTERNAL' ? {} : { lastActivityDirection: direction };
       await tx.opportunity.update({
         where: { id: data.opportunityId },
         data: {
           lastActivityAt: now,
+          ...directionUpdate,
           ...(data.nextActionDate && {
             nextActionDate: data.nextActionDate,
             nextActionNote: data.nextActionNote,

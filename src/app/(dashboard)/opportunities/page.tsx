@@ -68,6 +68,8 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
     probability: o.probability,
     expectedCloseDate: o.expectedCloseDate,
     nextActionDate: o.nextActionDate,
+    lastActivityAt: o.lastActivityAt,
+    lastActivityDirection: o.lastActivityDirection,
     updatedAt: o.updatedAt,
     account: o.account,
     owner: o.owner,
