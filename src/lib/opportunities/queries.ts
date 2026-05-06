@@ -124,12 +124,14 @@ export async function getOpportunityById(session: Session, id: string) {
           },
         },
         orderBy: [{ isPrimary: 'desc' }, { addedAt: 'asc' }],
+        take: 50,  // OPT-003: cap. Si una opp tiene >50 contactos, paginar.
       },
       stageHistory: {
         include: {
           changedBy: { select: { id: true, name: true } },
         },
         orderBy: { changedAt: 'desc' },
+        take: 50,  // OPT-003: cap. La UI muestra los últimos cambios.
       },
       checkpoints: {
         include: {
@@ -139,6 +141,7 @@ export async function getOpportunityById(session: Session, id: string) {
         },
         // Pendings first, then completed; within each by dueDate asc.
         orderBy: [{ completedAt: 'asc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
+        take: 100,  // OPT-003: cap.
       },
     },
   });
