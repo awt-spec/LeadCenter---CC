@@ -103,14 +103,17 @@ export async function getTaskById(id: string) {
           },
           _count: { select: { subtasks: true, comments: true, attachments: true } },
         },
+        take: 30,  // OPT-004: cap. Más allá, hacer una task separada.
       },
       comments: {
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'desc' },  // newest first; UI revierte si quiere
         include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+        take: 50,  // OPT-004: cap. La UI puede paginar histórico viejo.
       },
       attachments: {
         orderBy: { uploadedAt: 'desc' },
         include: { uploadedBy: { select: { id: true, name: true } } },
+        take: 20,  // OPT-004: cap.
       },
       blockedBy: {
         include: {
