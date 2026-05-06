@@ -24,7 +24,11 @@ function row(input: Partial<AuditLogRow> & { id: string; createdAt: Date }): Aud
     ipAddress: input.ipAddress ?? null,
     userAgent: input.userAgent ?? null,
     createdAt: input.createdAt,
+    reviewedAt: input.reviewedAt ?? null,
+    reviewedById: input.reviewedById ?? null,
+    reviewNote: input.reviewNote ?? null,
     user: input.user ?? null,
+    reviewedBy: input.reviewedBy ?? null,
   };
 }
 

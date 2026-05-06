@@ -36,6 +36,7 @@ import { ActivityHeatmap, HourDistribution } from './components/activity-heatmap
 import { UserActivityPanel } from './components/user-activity-panel';
 import { OnlineNowCard } from './components/online-now';
 import { AuditToolbar } from './components/audit-toolbar';
+import { ReviewBar } from './components/review-bar';
 
 export const metadata = { title: 'Auditoría' };
 export const dynamic = 'force-dynamic';
@@ -198,6 +199,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Search
                 dateFrom: filters.dateFrom,
                 dateTo: filters.dateTo,
                 q: filters.q,
+                reviewState: filters.reviewState,
               }}
             />
           </Card>
@@ -251,6 +253,8 @@ export default async function AuditPage({ searchParams }: { searchParams: Search
           </Card>
         </aside>
       </div>
+
+      <ReviewBar />
     </div>
   );
 }

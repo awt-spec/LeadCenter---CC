@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Download, Pause, Play, RefreshCw } from 'lucide-react';
 import { SavedViews } from './saved-views';
+import { VerifyChainButton } from './verify-chain-button';
 
 export function AuditToolbar() {
   const router = useRouter();
@@ -73,6 +74,8 @@ export function AuditToolbar() {
         <Download className="h-3.5 w-3.5" />
         Export CSV
       </a>
+
+      <VerifyChainButton />
 
       {live ? (
         <span className="text-[11px] text-sysde-mid ml-1">

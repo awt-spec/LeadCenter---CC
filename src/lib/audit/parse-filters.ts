@@ -23,6 +23,12 @@ export function parseAuditFilters(
   const pageRaw = parseInt(get('page') ?? '1', 10);
   const pageSizeRaw = parseInt(get('pageSize') ?? `${DEFAULT_PAGE_SIZE}`, 10);
 
+  const reviewRaw = get('reviewState');
+  const reviewState: 'reviewed' | 'unreviewed' | 'all' | undefined =
+    reviewRaw === 'reviewed' || reviewRaw === 'unreviewed' || reviewRaw === 'all'
+      ? reviewRaw
+      : undefined;
+
   return {
     userId: getAll('userId').filter(Boolean),
     action: getAll('action').filter(Boolean),
@@ -30,6 +36,7 @@ export function parseAuditFilters(
     dateFrom: get('dateFrom'),
     dateTo: get('dateTo'),
     q: get('q')?.trim() || undefined,
+    reviewState,
     page: Number.isFinite(pageRaw) && pageRaw >= 1 ? pageRaw : 1,
     pageSize:
       Number.isFinite(pageSizeRaw) && pageSizeRaw > 0

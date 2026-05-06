@@ -2,6 +2,7 @@ import 'server-only';
 import { headers } from 'next/headers';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
+import { computeHash, getLastHash } from './hash-chain';
 
 /**
  * Helper centralizado para escribir entradas de AuditLog.
@@ -46,7 +47,15 @@ async function getRequestContext(): Promise<{
 
 export async function writeAuditLog(input: AuditWriteInput): Promise<void> {
   const { ipAddress, userAgent } = await getRequestContext();
-  await prisma.auditLog.create({
+
+  // Audit v3 (Batch D): hash chain.
+  // Leemos último hash y creamos el row; después computamos el hash de
+  // este row (con id real ya generado) y lo persistimos en un update.
+  // Si el update falla, el row queda con hash=null — verifyChain lo
+  // ignora y un re-populate posterior lo arregla.
+  const previousHash = await getLastHash();
+
+  const created = await prisma.auditLog.create({
     data: {
       userId: input.userId,
       action: input.action,
@@ -56,8 +65,30 @@ export async function writeAuditLog(input: AuditWriteInput): Promise<void> {
       metadata: input.metadata ?? undefined,
       ipAddress,
       userAgent,
+      previousHash,
+    },
+    select: {
+      id: true,
+      userId: true,
+      action: true,
+      resource: true,
+      resourceId: true,
+      changes: true,
+      metadata: true,
+      createdAt: true,
     },
   });
+
+  const hash = computeHash(created, previousHash);
+  await prisma.auditLog
+    .update({
+      where: { id: created.id },
+      data: { hash },
+    })
+    .catch((err) => {
+      // No-op: si falla, queda sin hash. verifyChain skipea rows sin hash.
+      console.error('[audit] hash write failed', created.id, err);
+    });
 }
 
 /**

@@ -32,6 +32,7 @@ export function AuditFilters({
     dateFrom?: string;
     dateTo?: string;
     q?: string;
+    reviewState?: 'reviewed' | 'unreviewed' | 'all';
   };
 }) {
   const router = useRouter();
@@ -57,7 +58,9 @@ export function AuditFilters({
 
   function clearAll() {
     update((n) => {
-      ['userId', 'action', 'resource', 'dateFrom', 'dateTo', 'q'].forEach((k) => n.delete(k));
+      ['userId', 'action', 'resource', 'dateFrom', 'dateTo', 'q', 'reviewState'].forEach((k) =>
+        n.delete(k)
+      );
     });
   }
 
@@ -67,7 +70,8 @@ export function AuditFilters({
     current.resource.length ||
     current.dateFrom ||
     current.dateTo ||
-    current.q;
+    current.q ||
+    (current.reviewState && current.reviewState !== 'all');
 
   const userOptions: Option[] = users.map((u) => ({
     value: u.id,
@@ -130,6 +134,33 @@ export function AuditFilters({
               });
             }}
           />
+        </div>
+
+        <div className="inline-flex items-center gap-1 ml-2">
+          <span className="text-xs text-sysde-mid">Revisión</span>
+          {(['unreviewed', 'reviewed', 'all'] as const).map((opt) => {
+            const isActive = (current.reviewState ?? 'all') === opt;
+            const label = opt === 'unreviewed' ? 'Sin revisar' : opt === 'reviewed' ? 'Revisados' : 'Todos';
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() =>
+                  update((n) => {
+                    if (opt === 'all') n.delete('reviewState');
+                    else n.set('reviewState', opt);
+                  })
+                }
+                className={`text-[11px] px-2 py-1 rounded-full border transition-colors ${
+                  isActive
+                    ? 'border-sysde-red bg-sysde-red text-white'
+                    : 'border-sysde-border bg-white text-sysde-gray hover:border-sysde-red'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         {hasFilters ? (

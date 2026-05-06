@@ -66,6 +66,8 @@ model User {
 
   // Audit v3 — vistas guardadas de la sección /audit
   auditViews                   AuditView[] @relation("UserAuditViews")
+  // Audit v3 — eventos de auditoria que este user marco como revisados
+  reviewedAuditLogs            AuditLog[]  @relation("AuditLogReviewer")
 
   @@index([email])
 }
@@ -142,11 +144,24 @@ model AuditLog {
   userAgent  String?
   createdAt  DateTime @default(now())
 
-  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // Audit v3 (Batch D): revisión humana de eventos
+  reviewedAt   DateTime?
+  reviewedById String?
+  reviewNote   String?
+
+  // Audit v3 (Batch D): tamper-evident hash chain
+  // `hash` = sha256 hex de campos canonicalizados de este row + previousHash
+  // `previousHash` = hash del row inmediatamente anterior por createdAt
+  hash         String?
+  previousHash String?
+
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  reviewedBy   User?    @relation("AuditLogReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([resource, resourceId])
   @@index([createdAt])
+  @@index([reviewedAt])
 }
 
 // ==================== ACCOUNTS ====================

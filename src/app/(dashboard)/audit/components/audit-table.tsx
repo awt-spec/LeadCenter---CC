@@ -53,6 +53,7 @@ export function AuditTable({
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-[32px]"></TableHead>
             <TableHead className="w-[160px]">Cuándo</TableHead>
             <TableHead>Usuario</TableHead>
             <TableHead>Acción</TableHead>
@@ -60,13 +61,14 @@ export function AuditTable({
             <TableHead>ID</TableHead>
             <TableHead>IP</TableHead>
             <TableHead className="w-[60px]">Cliente</TableHead>
+            <TableHead className="w-[60px]">Rev.</TableHead>
             <TableHead className="w-[60px] text-right">Detalle</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="text-center py-12 text-sysde-mid text-sm">
+              <TableCell colSpan={10} className="text-center py-12 text-sysde-mid text-sm">
                 Sin eventos para los filtros actuales.
               </TableCell>
             </TableRow>
@@ -137,6 +139,17 @@ function AuditRow({ row, flags }: { row: AuditLogRow; flags?: AnomalyFlag[] }) {
   return (
     <TableRow className={rowBg}>
       <TableCell className="align-top">
+        <input
+          type="checkbox"
+          data-audit-review
+          value={row.id}
+          defaultChecked={false}
+          disabled={!!row.reviewedAt}
+          aria-label="Marcar para revisión"
+          className="h-3.5 w-3.5 accent-sysde-red cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+        />
+      </TableCell>
+      <TableCell className="align-top">
         <div className="text-sm text-sysde-gray">
           {formatDistanceToNow(row.createdAt, { addSuffix: true, locale: es })}
         </div>
@@ -190,6 +203,18 @@ function AuditRow({ row, flags }: { row: AuditLogRow; flags?: AnomalyFlag[] }) {
       </TableCell>
       <TableCell className="align-top">
         <UAIcon ua={row.userAgent} />
+      </TableCell>
+      <TableCell className="align-top">
+        {row.reviewedAt ? (
+          <span
+            className="inline-flex items-center gap-1 text-[10px] text-green-700 bg-green-50 border border-green-200 rounded px-1.5 py-0.5"
+            title={`Revisado por ${row.reviewedBy?.name ?? row.reviewedBy?.email ?? '?'} el ${row.reviewedAt.toISOString().slice(0, 16).replace('T', ' ')}${row.reviewNote ? ` — "${row.reviewNote}"` : ''}`}
+          >
+            ✓ {row.reviewedBy?.name?.split(' ')[0] ?? 'sí'}
+          </span>
+        ) : (
+          <span className="text-sysde-mid text-xs">—</span>
+        )}
       </TableCell>
       <TableCell className="align-top text-right">
         {hasDetail ? (

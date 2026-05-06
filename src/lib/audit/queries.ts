@@ -29,6 +29,7 @@ export type AuditFilters = {
   dateFrom?: string;
   dateTo?: string;
   q?: string;
+  reviewState?: 'reviewed' | 'unreviewed' | 'all';
   page: number;
   pageSize: number;
 };
@@ -44,7 +45,11 @@ export type AuditLogRow = {
   ipAddress: string | null;
   userAgent: string | null;
   createdAt: Date;
+  reviewedAt: Date | null;
+  reviewedById: string | null;
+  reviewNote: string | null;
   user: { id: string; name: string | null; email: string; avatarUrl: string | null } | null;
+  reviewedBy: { id: string; name: string | null; email: string } | null;
 };
 
 export type AuditStats = {
@@ -110,6 +115,12 @@ function buildWhere(filters: AuditFilters): Prisma.AuditLogWhereInput {
     });
   }
 
+  if (filters.reviewState === 'reviewed') {
+    and.push({ reviewedAt: { not: null } });
+  } else if (filters.reviewState === 'unreviewed') {
+    and.push({ reviewedAt: null });
+  }
+
   if (and.length) where.AND = and;
   return where;
 }
@@ -126,6 +137,7 @@ export async function listAuditLog(
       where,
       include: {
         user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        reviewedBy: { select: { id: true, name: true, email: true } },
       },
       orderBy: { createdAt: 'desc' },
       skip: (filters.page - 1) * filters.pageSize,
