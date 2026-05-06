@@ -17,5 +17,11 @@ export async function GET(
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  return NextResponse.json({ task });
+  // OPT-010: cache-control. El task drawer hace GET en open + después de
+  // cada mutation (refetch). Con cache de 30s, el "abrir-cerrar-abrir"
+  // sirve del cache. Mutations llaman router.refresh que invalida igual.
+  return NextResponse.json(
+    { task },
+    { headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=120' } }
+  );
 }

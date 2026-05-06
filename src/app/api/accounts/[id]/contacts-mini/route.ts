@@ -26,5 +26,15 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     orderBy: [{ engagementScore: 'desc' }, { fullName: 'asc' }],
     take: 100,
   });
-  return NextResponse.json({ contacts: rows });
+  return NextResponse.json(
+    { contacts: rows },
+    {
+      // OPT-010: cache-control para que el browser/CDN reuse este JSON.
+      // - private = no compartir entre users distintos.
+      // - max-age 60s = el composer no necesita data más fresca.
+      // - stale-while-revalidate 300s = ante navegación back/forward
+      //   sirve el cache mientras refresca en bg.
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
+    }
+  );
 }
