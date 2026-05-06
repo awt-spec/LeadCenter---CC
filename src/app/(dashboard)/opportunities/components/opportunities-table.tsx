@@ -14,6 +14,7 @@ import { getInitials, cn } from '@/lib/utils';
 
 import type { ActivityDirection } from '@prisma/client';
 import { ManagementBadges } from '@/components/opportunities/management-badges';
+import { computeStaleness, computeBallInCourt } from '@/lib/opportunities/management-rules';
 
 export type OpportunityRow = {
   id: string;
@@ -186,6 +187,20 @@ export function OpportunitiesTable({
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  // Reglas de gestión: pintamos un left-border colorado segun la
+  // prioridad. Ball-in-court (azul) gana sobre staleness rojo>orange>yellow.
+  const rowClassName = (r: OpportunityRow): string | undefined => {
+    if (r.status !== 'OPEN') return undefined;
+    const ball = computeBallInCourt(r.lastActivityAt, r.lastActivityDirection);
+    if (ball.needsResponse) return 'border-l-4 border-l-blue-500';
+    const stale = computeStaleness(r.lastActivityAt);
+    if (stale.level === 'red' || stale.level === 'never')
+      return 'border-l-4 border-l-red-500';
+    if (stale.level === 'orange') return 'border-l-4 border-l-orange-500';
+    if (stale.level === 'yellow') return 'border-l-4 border-l-yellow-400';
+    return undefined;
+  };
+
   return (
     <div>
       <DataTable
@@ -193,6 +208,7 @@ export function OpportunitiesTable({
         data={rows}
         getRowId={(r) => r.id}
         onRowClick={(r) => router.push(`/opportunities/${r.id}`)}
+        rowClassName={rowClassName}
       />
       <div className="mt-4 flex items-center justify-between text-sm text-sysde-mid">
         <div>

@@ -1,12 +1,19 @@
 import Link from 'next/link';
+import type { Session } from 'next-auth';
+import type { Prisma } from '@prisma/client';
 import { Megaphone, Database, Users, Building2, ListChecks, Sparkles, ArrowUpRight } from 'lucide-react';
 import { auth } from '@/lib/auth';
-import { hasRole } from '@/lib/rbac';
+import { hasRole, can } from '@/lib/rbac';
 import { Forbidden } from '@/components/shared/forbidden';
 import { Card } from '@/components/ui/card';
 import { loadMarketingSprint, loadBDSprint, loadAudit } from '@/lib/sprint/queries';
+import {
+  getManagementStats,
+  getNeedAttentionOpps,
+} from '@/lib/opportunities/management-queries';
 import { SprintBoardView } from './components/sprint-board';
 import { AuditTable } from './components/audit-table';
+import { NeedAttentionHero } from '../opportunities/components/need-attention-hero';
 
 export const metadata = { title: 'Sprint' };
 export const dynamic = 'force-dynamic';
@@ -89,6 +96,12 @@ export default async function SprintPage({ searchParams }: { searchParams: Searc
         </div>
       </header>
 
+      {/* Hero "Atención requerida" del usuario actual — siempre visible
+          en Sprint (excepto en Auditoría que tiene su propia consola). */}
+      {tab !== 'audit' ? (
+        <MyAttentionWidget session={session} />
+      ) : null}
+
       {tab === 'audit' ? (
         <AuditView />
       ) : roleView === 'marketing' ? (
@@ -97,6 +110,35 @@ export default async function SprintPage({ searchParams }: { searchParams: Searc
         <BDView session={session} />
       )}
     </div>
+  );
+}
+
+async function MyAttentionWidget({ session }: { session: Session }) {
+  // Permiso de leer opps. Si solo tiene :read:own scopeamos a sus propias.
+  if (!can(session, 'opportunities:read:all') && !can(session, 'opportunities:read:own')) {
+    return null;
+  }
+  const canAll = can(session, 'opportunities:read:all');
+  // En Sprint queremos ver SIEMPRE las del user actual aunque sea admin —
+  // el sprint es personal.
+  const scope: Prisma.OpportunityWhereInput = canAll
+    ? { ownerId: session.user.id }
+    : { ownerId: session.user.id };
+
+  const [stats, opps] = await Promise.all([
+    getManagementStats(scope),
+    getNeedAttentionOpps(scope, 6),
+  ]);
+
+  // Si no tiene NADA en su pipeline abierto, no mostramos el widget
+  if (stats.total === 0) return null;
+
+  return (
+    <NeedAttentionHero
+      opps={opps}
+      totalNeedsResponse={stats.needsResponse}
+      totalRed={stats.red}
+    />
   );
 }
 

@@ -5,12 +5,20 @@ import { can } from '@/lib/rbac';
 import { Button } from '@/components/ui/button';
 import { Forbidden } from '@/components/shared/forbidden';
 import { EmptyState } from '@/components/shared/empty-state';
+import type { Prisma } from '@prisma/client';
 import { listCountries, listUsers } from '@/lib/contacts/queries';
 import { listOpportunities, getOpportunityStats } from '@/lib/opportunities/queries';
+import {
+  getManagementStats,
+  getNeedAttentionOpps,
+} from '@/lib/opportunities/management-queries';
 import { opportunityFilterSchema } from '@/lib/opportunities/schemas';
 import { OpportunityStats } from './components/opportunity-stats';
 import { OpportunitiesFilters } from './components/opportunities-filters';
 import { OpportunitiesTable, type OpportunityRow } from './components/opportunities-table';
+import { OpportunitiesCards } from './components/opportunities-cards';
+import { ManagementStatsStrip } from './components/management-stats-strip';
+import { NeedAttentionHero } from './components/need-attention-hero';
 
 export const metadata = { title: 'Oportunidades' };
 
@@ -46,14 +54,44 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
     sortDir: sp.sortDir === 'asc' ? 'asc' : 'desc',
   });
 
-  const [{ rows, total }, stats, countries, users] = await Promise.all([
+  // Scope para management stats: si user es admin, ve todas; si solo
+  // tiene :read:own, ve las suyas. Mismo principio que listOpportunities.
+  const canAll = can(session, 'opportunities:read:all');
+  const mgmtScope: Prisma.OpportunityWhereInput = canAll
+    ? {}
+    : { ownerId: session.user.id };
+  // Si el user activó "onlyMine" en filtros, también scopeamos las stats
+  const effectiveScope: Prisma.OpportunityWhereInput =
+    filters.onlyMine && canAll ? { ownerId: session.user.id } : mgmtScope;
+
+  const [
+    { rows, total },
+    stats,
+    mgmtStats,
+    needAttention,
+    countries,
+    users,
+  ] = await Promise.all([
     listOpportunities(session, filters),
     getOpportunityStats(session),
+    getManagementStats(effectiveScope),
+    getNeedAttentionOpps(effectiveScope, 6),
     listCountries(),
     listUsers(),
   ]);
 
   const canCreate = can(session, 'opportunities:create');
+
+  // Vista preferida (table o cards). Default = table.
+  const viewMode: 'table' | 'cards' = sp.view === 'cards' ? 'cards' : 'table';
+
+  // Reconstruimos URLSearchParams para los hijos (stats strip, etc.)
+  const searchParamsString = new URLSearchParams();
+  for (const [k, v] of Object.entries(sp)) {
+    if (v === undefined) continue;
+    if (Array.isArray(v)) v.forEach((val) => searchParamsString.append(k, val));
+    else searchParamsString.set(k, v);
+  }
 
   const tableRows: OpportunityRow[] = rows.map((o) => ({
     id: o.id,
@@ -88,13 +126,37 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
         </div>
         <div className="flex items-center gap-2">
           <div className="inline-flex rounded-lg border border-sysde-border bg-white p-1 text-sm">
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-md bg-sysde-bg px-3 py-1 font-medium text-sysde-gray"
+            <Link
+              href={(() => {
+                const next = new URLSearchParams(searchParamsString);
+                next.delete('view');
+                const qs = next.toString();
+                return `/opportunities${qs ? '?' + qs : ''}`;
+              })()}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 font-medium transition-colors ${
+                viewMode === 'table'
+                  ? 'bg-sysde-bg text-sysde-gray'
+                  : 'text-sysde-mid hover:bg-sysde-bg hover:text-sysde-gray'
+              }`}
             >
               <TableIcon className="h-3.5 w-3.5" />
               Tabla
-            </button>
+            </Link>
+            <Link
+              href={(() => {
+                const next = new URLSearchParams(searchParamsString);
+                next.set('view', 'cards');
+                return `/opportunities?${next.toString()}`;
+              })()}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 font-medium transition-colors ${
+                viewMode === 'cards'
+                  ? 'bg-sysde-bg text-sysde-gray'
+                  : 'text-sysde-mid hover:bg-sysde-bg hover:text-sysde-gray'
+              }`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              Cards
+            </Link>
             <Link
               href="/pipeline"
               className="inline-flex items-center gap-1.5 rounded-md px-3 py-1 font-medium text-sysde-mid transition-colors hover:bg-sysde-bg hover:text-sysde-gray"
@@ -122,6 +184,20 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
 
       <OpportunityStats stats={stats} />
 
+      {/* Reglas de gestión: stats strip clickeables + hero de atención */}
+      <div className="mt-6 space-y-4">
+        <ManagementStatsStrip
+          stats={mgmtStats}
+          searchParams={searchParamsString}
+          basePath="/opportunities"
+        />
+        <NeedAttentionHero
+          opps={needAttention}
+          totalNeedsResponse={mgmtStats.needsResponse}
+          totalRed={mgmtStats.red}
+        />
+      </div>
+
       <div className="mt-6">
         <OpportunitiesFilters
           countries={countries}
@@ -146,6 +222,13 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
               }
             />
           </div>
+        ) : viewMode === 'cards' ? (
+          <OpportunitiesCards
+            rows={tableRows}
+            total={total}
+            page={filters.page}
+            pageSize={filters.pageSize}
+          />
         ) : (
           <OpportunitiesTable
             rows={tableRows}

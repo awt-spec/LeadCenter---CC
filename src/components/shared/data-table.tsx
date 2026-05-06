@@ -26,6 +26,9 @@ type DataTableProps<TData> = {
   loading?: boolean;
   emptyState?: React.ReactNode;
   zebra?: boolean;
+  /// Función opcional para asignar clases a cada fila (e.g. left-border
+  /// color por prioridad). Se concatena después de las clases default.
+  rowClassName?: (row: TData) => string | undefined;
 };
 
 export function DataTable<TData>({
@@ -38,6 +41,7 @@ export function DataTable<TData>({
   loading,
   emptyState,
   zebra = true,
+  rowClassName,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([]);
 
@@ -99,7 +103,8 @@ export function DataTable<TData>({
                 className={cn(
                   onRowClick && 'cursor-pointer',
                   zebra && i % 2 === 1 && 'bg-neutral-50',
-                  row.getIsSelected() && '!bg-sysde-red-light'
+                  row.getIsSelected() && '!bg-sysde-red-light',
+                  rowClassName?.(row.original)
                 )}
               >
                 {row.getVisibleCells().map((cell) => (
