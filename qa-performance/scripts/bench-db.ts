@@ -89,9 +89,9 @@ async function main() {
     })
   ));
 
-  // ── ACTIVITY TIMELINE — el hot spot principal ──
+  // ── ACTIVITY TIMELINE (variante OLD con OR) — sólo para mostrar delta ──
   results.push(await bench(
-    'Activity timeline (cuenta más activa, 25 últimas)',
+    '[OLD] Activity timeline OR (3 paths)',
     () => prisma.activity.findMany({
       where: {
         OR: [
@@ -100,6 +100,27 @@ async function main() {
           { contact: { accountId: topActiveAccount } },
         ],
       },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        contact: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
+        account: { select: { id: true, name: true } },
+        opportunity: { select: { id: true, name: true, code: true } },
+        participants: { include: { contact: { select: { id: true, fullName: true, avatarUrl: true } } }, take: 8 },
+        mentions: { include: { mentionedUser: { select: { id: true, name: true, avatarUrl: true } } }, take: 5 },
+        attachments: { select: { id: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true }, take: 8 },
+        nextActionAssignee: { select: { id: true, name: true, avatarUrl: true } },
+        assignees: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } }, take: 5 },
+      },
+      orderBy: { occurredAt: 'desc' },
+      take: 25,
+    })
+  ));
+
+  // ── ACTIVITY TIMELINE (variante NEW post-OPT-005, accountId directo) ──
+  results.push(await bench(
+    '[NEW] Activity timeline accountId directo (post OPT-005)',
+    () => prisma.activity.findMany({
+      where: { accountId: topActiveAccount },
       include: {
         createdBy: { select: { id: true, name: true, email: true, avatarUrl: true } },
         contact: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
